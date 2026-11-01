@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Radiant · Omni Converter</title>
+<style>
+:root{
+  --bg:#faf8f3;--pn:#fffdf8;--bd:#e5e0d5;--bh:#d0c9ba;
+  --tx:#2b2926;--mu:#8a8478;--fa:#b5ad9d;
+  --ac:#3b82f6;--ah:#2563eb;--ok:#22c55e;--wn:#f59e0b;--er:#ef4444;
+  --r:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;line-height:1.5;background:var(--bg);color:var(--tx);padding:32px 16px 64px;-webkit-font-smoothing:antialiased}
+.app{max-width:720px;margin:0 auto}
+.header{margin-bottom:20px}
+.header-row{display:flex;align-items:baseline;gap:8px}
+.header h1{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.ver{font-size:11px;color:var(--fa);border:1px solid var(--bd);border-radius:4px;padding:1px 6px;letter-spacing:.04em}
+.header p{font-size:12px;color:var(--mu);margin-top:3px}
+.drop{border:1px dashed var(--bd);border-radius:var(--r);padding:28px 16px;text-align:center;cursor:pointer;color:var(--mu);font-size:13px;transition:border-color .15s,background .15s;background:var(--pn)}
+.drop:hover,.drop.dragover{border-color:var(--ac);background:#f0f4ff}
+.drop .link{color:var(--ac)}
+.drop .hint{display:block;margin-top:6px;font-size:11px;color:var(--fa)}
+.wizard{display:none;background:var(--pn);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-top:16px}
+.wizard.show{display:block}
+.wiz-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd);position:relative}
+.wiz-title{font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;min-width:0}
+.wiz-title .icn{font-size:16px;flex-shrink:0}
+.wiz-title .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wiz-step{font-size:11px;color:var(--mu);flex-shrink:0;margin-left:8px}
+.wiz-rm{width:24px;height:24px;padding:0;background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--mu);font-size:14px;line-height:1;cursor:pointer;transition:border-color .15s,color .15s;margin-left:auto;flex-shrink:0}
+.wiz-rm:hover:not(:disabled){border-color:var(--er);color:var(--er)}
+.wiz-rm:disabled{opacity:.4;cursor:not-allowed}
+.wiz-body{display:flex;flex-direction:column;gap:12px}
+.wiz-row{display:flex;flex-direction:column;gap:6px}
+.wiz-row label{font-size:11px;color:var(--mu)}
+.dd{position:relative;min-width:140px;display:inline-block;max-width:100%}
+.dd-trigger{width:100%;height:32px;padding:0 30px 0 10px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:12px;font-family:inherit;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:border-color .15s}
+.dd-trigger:hover{border-color:var(--bh)}
+.dd.open .dd-trigger{border-color:var(--ac)}
+.dd-arrow{color:var(--mu);font-size:10px;transition:transform .15s;flex-shrink:0;margin-left:6px}
+.dd.open .dd-arrow{transform:rotate(180deg)}
+.dd-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:160px;max-height:280px;overflow-y:auto;background:var(--pn);border:1px solid var(--bd);border-radius:6px;box-shadow:0 8px 24px rgba(43,41,38,.12);z-index:100;padding:4px;list-style:none;margin:0}
+.dd.open .dd-menu{display:block}
+.dd-item{padding:6px 10px;border-radius:4px;font-size:12px;color:var(--tx);cursor:pointer;white-space:nowrap}
+.dd-item:hover,.dd-item.focused{background:#eff4ff}
+.dd-item.selected{color:var(--ac);background:#e8f0fe}
+.dd-group{font-size:10px;color:var(--fa);padding:6px 10px 2px;text-transform:uppercase;letter-spacing:.05em;user-select:none}
+.quality-row{display:flex;align-items:center;gap:10px}
+.quality-row input[type=range]{flex:1;accent-color:var(--ac);cursor:pointer}
+.quality-row .qval{font-size:11px;color:var(--mu);min-width:24px;text-align:right}
+.quality-row.disabled{opacity:.4;pointer-events:none}
+.quality-row.disabled::after{content:"此格式无质量参数";font-size:11px;color:var(--fa);pointer-events:none;margin-left:6px}
+.wiz-nav{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid var(--bd)}
+.wiz-nav .btns{display:flex;gap:8px}
+.btn{height:32px;padding:0 14px;background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;transition:border-color .15s,background .15s}
+.btn:hover:not(:disabled){border-color:var(--bh)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-p{background:var(--ac);border-color:var(--ac);color:#fff}
+.btn-p:hover:not(:disabled){background:var(--ah);border-color:var(--ah)}
+.btn-sm{height:26px;padding:0 10px;font-size:11px}
+.results{display:none;margin-top:20px}
+.results.show{display:block}
+.results h3{font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mu)}
+.result-item{display:flex;align-items:center;gap:10px;background:var(--pn);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:6px}
+.result-item .ri-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-item .ri-meta{font-size:11px;color:var(--mu);flex-shrink:0}
+.result-item .ri-ok{color:var(--ok);flex-shrink:0;font-weight:600}
+.result-item .ri-err{color:var(--er);flex-shrink:0;font-weight:600}
+.result-item .ri-dl{height:24px;padding:0 9px;font-size:11px;background:var(--pn);border:1px solid var(--bd);border-radius:5px;color:var(--ac);cursor:pointer;flex-shrink:0}
+.result-item .ri-dl:hover{border-color:var(--ac)}
+.progress-text{font-size:12px;color:var(--wn);margin-top:6px}
+.progress-bar{height:2px;background:var(--bd);border-radius:1px;margin-top:6px;overflow:hidden;display:none}
+.progress-bar.show{display:block}
+.progress-bar-fill{height:100%;width:0;background:var(--ac);transition:width .2s}
+.status-msg{font-size:12px;color:var(--mu);margin-top:8px;text-align:center;min-height:16px}
+.status-msg.error{color:var(--er)}
+.status-msg.ok{color:var(--ok)}
+.proxy{margin-top:10px;font-size:11px;color:var(--mu)}
+.proxy summary{cursor:pointer;user-select:none;list-style:none;display:inline-block}
+.proxy summary::-webkit-details-marker{display:none}
+.proxy summary::before{content:"+ ";color:var(--fa)}
+.proxy[open] summary::before{content:"− "}
+.proxy input{width:100%;margin-top:6px;height:28px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:0 10px;font-size:11px;outline:none}
+.proxy input:focus{border-color:var(--ac)}
+.url-row{display:flex;gap:8px;margin-top:10px}
+.url-row input[type=url]{flex:1;min-width:0;height:32px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:0 10px;font-size:12px;outline:none}
+.url-row input[type=url]:focus{border-color:var(--ac)}
+.url-row input[type=url]::placeholder{color:var(--fa)}
+.ov{position:fixed;inset:0;background:rgba(250,248,243,.9);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:999;pointer-events:none}
+.ov.show{display:flex}
+.ov-in{padding:32px 48px;border:2px dashed var(--ac);border-radius:12px;color:var(--ac);font-size:14px;background:#f0f4ff}
+.frame-info{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--mu);flex-wrap:wrap}
+.frame-info .fc{color:var(--tx)}
+.frames-details{margin-top:12px;font-size:12px;border:1px solid var(--bd);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.frames-details summary{cursor:pointer;color:var(--mu);user-select:none;outline:none}
+.frames-details summary::-webkit-details-marker{display:none}
+.frames-details summary::before{content:"▸ ";color:var(--fa)}
+.frames-details[open] summary::before{content:"▾ "}
+.frames-list{margin-top:10px;max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.frame-item{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--pn);border:1px solid var(--bd);border-radius:4px;font-size:11px}
+.frame-item .frame-name{flex:1;color:var(--mu);font-family:ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frame-item .dd{min-width:100px}
+.clear-row{display:flex;justify-content:flex-end;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="header">
+  <div class="header-row"><h1>图片 / 视频 / 音频 / 压缩包转换</h1><span class="ver">Radiant</span></div>
+  <p>纯本地处理，文件不会上传到任何服务器</p>
+</header>
+<div class="drop" id="dropZone">
+  拖拽文件到此处，或 <span class="link">选择文件</span>
+  <span class="hint">图片 · 视频 · 音频 · 压缩包（ZIP/7Z/RAR/TAR/TAR.GZ/TAR.BZ2/XZ/LZMA/CAB/ISO）</span>
+</div>
+<div class="url-row">
+  <input type="url" id="urlInput" placeholder="粘贴文件链接">
+  <button class="btn" id="addUrlBtn">添加</button>
+</div>
+<details class="proxy"><summary>跨域失败？配置代理</summary><input type="url" id="proxyInput" placeholder="代理前缀，如 https://your-proxy.com/?url="></details>
+<div class="status-msg" id="statusMsg"></div>
+<div class="wizard" id="wizard">
+  <div class="wiz-head">
+	<div class="wiz-title">
+	  <span class="icn" id="wizIcon">📷</span>
+	  <span class="nm" id="wizName">—</span>
+	  <span class="wiz-step" id="wizStep">1 / 1</span>
+	</div>
+  </div>
+  <div class="wiz-body">
+	<div class="wiz-row" id="rowFormat">
+	  <label>输出格式</label>
+	  <div id="ddSlot"></div>
+	</div>
+	<div class="wiz-row" id="rowQuality">
+	  <label>质量</label>
+	  <div class="quality-row" id="qualityRow">
+		<input type="range" id="qualitySlider" min="10" max="100" value="82">
+		<span class="qval" id="qualityVal">82</span>
+	  </div>
+	</div>
+	<div class="wiz-row" id="rowPack" style="display:none">
+	  <label>打包格式</label>
+	  <div id="packDdSlot"></div>
+	</div>
+	<div class="wiz-row" id="rowFrameFormat" style="display:none">
+	  <label>帧格式</label>
+	  <div id="frameFmtSlot"></div>
+	</div>
+	<div class="wiz-row" id="rowFramePack" style="display:none">
+	  <label>帧序列打包格式</label>
+	  <div id="framePackSlot"></div>
+	</div>
+	<div class="wiz-row" id="rowFrameInfo" style="display:none">
+	  <label>帧信息</label>
+	  <div class="frame-info">
+		<span class="fc" id="frameCountText">点击下方按钮读取帧数</span>
+		<button class="btn btn-sm" id="probeFramesBtn" type="button">读取帧数</button>
+	  </div>
+	</div>
+	<details class="frames-details" id="framesDetails" style="display:none">
+	  <summary>逐帧设置（<span id="frameCountLabel">0</span> 帧）</summary>
+	  <div class="frames-list" id="framesList"></div>
+	</details>
+  </div>
+  <div id="wizProgress" class="progress-text" style="display:none"></div>
+  <div class="progress-bar" id="wizProgressBar"><div class="progress-bar-fill" id="wizProgressFill"></div></div>
+  <div class="wiz-nav">
+	<button class="btn" id="prevBtn">◀ 上一个</button>
+	<div class="btns">
+	  <button class="btn" id="nextBtn">下一个 ▶</button>
+	  <button class="btn btn-p" id="convertBtn">转换</button>
+	  <button class="btn btn-p" id="packBtn" style="display:none">打包</button>
+	</div>
+  </div>
+</div>
+<div class="clear-row">
+  <button class="btn" id="clearBtn" style="display:none">清空队列</button>
+</div>
+<div class="results" id="results">
+  <h3>转换记录</h3>
+  <div id="resultList"></div>
+  <div style="margin-top:12px;text-align:right">
+	<button class="btn" id="downloadAllBtn">打包下载全部</button>
+  </div>
+</div>
+</div>
+<div id="dropOverlay" class="ov"><div class="ov-in">松开以添加文件</div></div>
+<script type="module">
+/* Radiant · 恢复单文件移除 + 简化 PNM + 懒加载重试 */
+/* ==================== CDN（镜像 + 版本已验证） ==================== */
+const CDN={
+  jsquash:'https://cdn.jsdmirror.com/npm/@jsquash',
+  utif:'https://cdn.jsdmirror.com/npm/utif@3.1.0/+esm',
+  heic:'https://cdn.jsdmirror.com/npm/heic-to@1.6.6/+esm',
+  tga:'https://cdn.jsdmirror.com/npm/@lunapaint/tga-codec@0.2.0/+esm',
+  hdrify:'https://cdn.jsdmirror.com/npm/hdrify@1.3.0/+esm',
+  fitsRead:'https://cdn.jsdelivr.net/npm/@observerly/fits@0.1.0/+esm',
+  fits2js:'https://cdn.jsdmirror.com/npm/fits2js@0.0.6/+esm',
+  raw:'https://cdn.jsdmirror.com/npm/rawconvert-wasm@0.1.0/+esm',
+  psd:'https://cdn.jsdmirror.com/npm/ag-psd@31.0.2/+esm',
+  dds:'https://cdn.jsdmirror.com/npm/dds-ktx-parser@1/+esm',
+  htj2k:'https://cdn.jsdmirror.com/npm/@itk-wasm/htj2k@2.3.1/+esm',
+  gifenc:'https://cdn.jsdmirror.com/npm/gifenc@1.0.3/+esm',
+  icns:'https://cdn.jsdmirror.com/npm/icns-endec@0.0.4/+esm',
+  upng:'https://cdn.jsdmirror.com/npm/@upng/upng-js/+esm',
+  ffmpeg:'https://cdn.jsdmirror.com/npm/@ffmpeg/ffmpeg@0.12.10/+esm',
+  ffmpegUtil:'https://cdn.jsdmirror.com/npm/@ffmpeg/util@0.12.1/+esm',
+  ffmpegCore:'https://cdn.jsdmirror.com/npm/@ffmpeg/core@0.12.10/dist/esm',
+  fflate:'https://cdn.jsdmirror.com/npm/fflate@0.8.2/+esm',
+  modernTar:'https://cdn.jsdmirror.com/npm/modern-tar@0.8.6/+esm',
+  sevenZip:'https://cdn.jsdmirror.com/npm/7z-wasm@1.2.0/+esm',
+  sevenZipWasm:'https://cdn.jsdmirror.com/npm/7z-wasm@1.2.0/7zz.wasm',
+  ktx2Enc:'https://cdn.jsdmirror.com/npm/ktx2-encoder@0.6.0/+esm',
+  gifski:'https://cdn.jsdmirror.com/npm/gifski-wasm@2.2.0/dist/encode.js',
+  t2d:'https://cdn.jsdmirror.com/npm/texture2ddecoder-wasm@1.2.5/+esm',
+  t2dWasm:'https://cdn.jsdmirror.com/npm/texture2ddecoder-wasm@1.2.5/wasm',
+};
+
+/* ==================== 格式常量 ==================== */
+const VIDEO_EXTS=['mp4','webm','mkv','mov','avi','flv','wmv','m4v','ts','3gp','ogv','mpeg','mpg','mts','m2ts','m2v','mpv','vob','asf','rm','rmvb','mxf','dv','gxf','nut','y4m','yuv','h264','h265','hevc','av1','ivf','m1v','m2p','ps','vro','mod','tod'];
+const AUDIO_EXTS=['mp3','wav','flac','aac','m4a','ogg','opus','wma','aiff','aif','amr','ac3','dts','ape','mka','mp2','au','caf','ra','wv'];
+const ARCHIVE_EXTS=['zip','7z','rar','tar','gz','tgz','bz2','tbz2','xz','lzma','cab','iso'];
+const IMAGE_EXTS=['png','jpg','jpeg','jfif','jpe','jif','pjpeg','pjp','webp','avif','jxl','tif','tiff','bmp','ico','cur','tga','qoi','pnm','ppm','pgm','pbm','pam','jp2','j2k','svg','hdr','exr','fits','fit','fts','dng','cr2','cr3','nef','arw','raf','psd','psb','dds','ktx','ktx2','dpx','apng','xbm','xpm','pcx','pvr','astc','heic','heif','gif','pfm','phm','sgi','ras','xwd'];
+
+const IMAGE_FMTS=['webp','jpeg','png','avif','jxl','tiff','bmp','ico','cur','tga','qoi','ppm','pgm','pam','j2k','hdr','exr','psd','fits','icns','dds','apng','xbm','xpm','pcx','pvr','ktx2','dpx','svg','gif'];
+const VIDEO_FMTS=['mp4','webm','mkv','mov','avi','3gp','ogv','ts','flv','wmv','mpeg','m4v','m2ts','hevc'];
+const AUDIO_FMTS=['mp3','ogg','opus','flac','wav','aac','m4a'];
+const PACK_FMTS=['zip','tar','targz','7z'];
+const FRAME_IMAGE_FMTS=['webp','png','jpeg','avif','tiff','bmp','qoi'];
+
+const FORMAT_LABELS={
+  webp:'WebP',jpeg:'JPEG',png:'PNG',avif:'AVIF',jxl:'JPEG XL',tiff:'TIFF',bmp:'BMP',ico:'ICO',cur:'CUR',
+  tga:'TGA',qoi:'QOI',ppm:'PPM',pgm:'PGM',pam:'PAM',j2k:'JPEG 2000',hdr:'HDR',exr:'OpenEXR',psd:'PSD',
+  fits:'FITS',icns:'ICNS',dds:'DDS',apng:'APNG',xbm:'XBM',xpm:'XPM',pcx:'PCX',pvr:'PVR',astc:'ASTC',
+  ktx2:'KTX2',dpx:'DPX',heic:'HEIC',svg:'SVG',gif:'GIF',
+  mp4:'MP4',webm:'WebM',mkv:'MKV',mov:'MOV',avi:'AVI','3gp':'3GP',ogv:'OGV',ts:'TS',flv:'FLV',
+  wmv:'WMV',mpeg:'MPEG',m4v:'M4V',m2ts:'M2TS',hevc:'HEVC (MP4)',
+  mp3:'MP3',ogg:'OGG Vorbis',opus:'Opus',flac:'FLAC',wav:'WAV',aac:'AAC',m4a:'M4A',
+  zip:'ZIP',tar:'TAR',targz:'TAR.GZ','7z':'7Z',
+  __frames__:'转为图片序列（打包）',
+};
+
+const EXT_MAP={jpeg:'jpg',png:'png',webp:'webp',avif:'avif',jxl:'jxl',tiff:'tiff',bmp:'bmp',ico:'ico',
+  cur:'cur',tga:'tga',qoi:'qoi',ppm:'ppm',pgm:'pgm',pam:'pam',j2k:'jp2',hdr:'hdr',exr:'exr',psd:'psd',
+  fits:'fits',icns:'icns',dds:'dds',apng:'apng',xbm:'xbm',xpm:'xpm',gif:'gif',pcx:'pcx',pvr:'pvr',
+  astc:'astc',ktx2:'ktx2',dpx:'dpx',heic:'heic',svg:'svg',
+  mp4:'mp4',webm:'webm',mkv:'mkv',mov:'mov',avi:'avi','3gp':'3gp',ogv:'ogv',ts:'ts',flv:'flv',
+  wmv:'wmv',mpeg:'mpg',m4v:'m4v',m2ts:'m2ts',hevc:'mp4',
+  mp3:'mp3',ogg:'ogg',opus:'opus',flac:'flac',wav:'wav',aac:'aac',m4a:'m4a',
+  zip:'zip',tar:'tar',targz:'tar.gz','7z':'7z'};
+
+const LOSSLESS_OUT=new Set(['png','bmp','tiff','psd','fits','dds','pvr','ktx2','qoi','ppm','pgm','pam','tga','xbm','xpm','pcx','apng','flac','wav','zip','tar','targz','7z']);
+
+/* ==================== 状态 ==================== */
+let queue=[];
+let curIdx=0;
+let ffmpegInstance=null, ffmpegLoading=null;
+let sevenZipInstance=null, sevenZipLoading=null;
+const bufferCache=new WeakMap();
+let nodeMap=new Map();
+let nodeIdCounter=0;
+let converting=false;
+const resultCache=[];
+
+const $=id=>document.getElementById(id);
+const dropZone=$('dropZone'), dropOverlay=$('dropOverlay'), urlInput=$('urlInput'),
+	  addUrlBtn=$('addUrlBtn'), proxyInput=$('proxyInput'), statusMsg=$('statusMsg'),
+	  wizard=$('wizard'), wizIcon=$('wizIcon'), wizName=$('wizName'), wizStep=$('wizStep'),
+	  ddSlot=$('ddSlot'), packDdSlot=$('packDdSlot'),
+	  qualitySlider=$('qualitySlider'), qualityVal=$('qualityVal'), qualityRow=$('qualityRow'),
+	  prevBtn=$('prevBtn'), nextBtn=$('nextBtn'), convertBtn=$('convertBtn'), packBtn=$('packBtn'),
+	  wizProgress=$('wizProgress'), wizProgressBar=$('wizProgressBar'), wizProgressFill=$('wizProgressFill'),
+	  results=$('results'), resultList=$('resultList'), downloadAllBtn=$('downloadAllBtn'),
+	  clearBtn=$('clearBtn'),
+	  frameFmtSlot=$('frameFmtSlot'), framePackSlot=$('framePackSlot'),
+	  frameCountText=$('frameCountText'), probeFramesBtn=$('probeFramesBtn'),
+	  framesDetails=$('framesDetails'), frameCountLabel=$('frameCountLabel'),
+	  framesList=$('framesList');
+
+/* ==================== 工具函数 ==================== */
+async function getArrayBuffer(file){
+  if(bufferCache.has(file))return bufferCache.get(file);
+  const buf=await file.arrayBuffer();
+  bufferCache.set(file,buf);
+  return buf;
+}
+function formatBytes(n){
+  if(!n)return'0 B';
+  if(n>=1048576)return(n/1048576).toFixed(1)+' MB';
+  if(n>=1024)return(n/1024).toFixed(0)+' KB';
+  return n+' B';
+}
+function guessMime(ext){
+  return{jpg:'image/jpeg',jpeg:'image/jpeg',jfif:'image/jpeg',png:'image/png',webp:'image/webp',
+	avif:'image/avif',jxl:'image/jxl',gif:'image/gif',bmp:'image/bmp',tif:'image/tiff',tiff:'image/tiff',
+	svg:'image/svg+xml',ico:'image/x-icon',heic:'image/heic',heif:'image/heif',
+	mp4:'video/mp4',webm:'video/webm',mkv:'video/x-matroska',mov:'video/quicktime',avi:'video/x-msvideo',
+	m2ts:'video/mp2t',mts:'video/mp2t',flv:'video/x-flv',wmv:'video/x-ms-wmv',
+	mp3:'audio/mpeg',wav:'audio/wav',flac:'audio/flac',aac:'audio/aac',m4a:'audio/mp4',
+	ogg:'audio/ogg',opus:'audio/opus',wma:'audio/x-ms-wma',aiff:'audio/aiff',amr:'audio/amr',
+	zip:'application/zip',xz:'application/x-xz',lzma:'application/x-lzma',
+	cab:'application/vnd.ms-cab-compressed',iso:'application/x-iso9660-image',
+  }[ext]||'application/octet-stream';
+}
+function mediaKind(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(VIDEO_EXTS.includes(ext)||file.type.startsWith('video/'))return'video';
+  if(AUDIO_EXTS.includes(ext)||file.type.startsWith('audio/'))return'audio';
+  if(IMAGE_EXTS.includes(ext)||file.type.startsWith('image/'))return'image';
+  return null;
+}
+function friendlyError(err){
+  const msg=String(err?.message||err);
+  const rules=[
+	[/createImageBitmap|could not be decoded/i,'浏览器无法解码此文件，可能已损坏或格式不受支持'],
+	[/Out of memory|allocation failed/i,'内存不足，请尝试更小的文件'],
+	[/CORS|cross-origin/i,'跨域被阻止，请配置代理'],
+	[/Failed to fetch|NetworkError/i,'网络请求失败，请检查链接或代理'],
+	[/x265|libheif/i,'HEVC/HEIC 编码器加载失败'],
+	[/Encoder.*not found|Unknown encoder/i,'当前引擎不支持此编码器'],
+	[/HEIC 编码需要同源 Web Worker/i,'HEIC 编码需要同源 Worker，当前单文件架构不支持'],
+	[/encrypted|password/i,'压缩包已加密，暂不支持密码'],
+	[/Invalid Zip|Corrupt|Invalid 7z|RAR|Unsupported archive/i,'压缩包解析失败'],
+	[/请先转换所有媒体/i,'请先转换压缩包内所有媒体'],
+	[/无法读取视频帧数/i,'无法读取视频帧数，可能格式不受支持'],
+  ];
+  for(const[re,tip]of rules)if(re.test(msg))return tip;
+  return msg.length>80?msg.slice(0,80)+'…':msg;
+}
+function setStatus(msg,type){
+  statusMsg.textContent=msg||'';
+  statusMsg.className='status-msg'+(type?' '+type:'');
+}
+async function gzipBytes(bytes){
+  try{
+	const cs=new CompressionStream('gzip');
+	const stream=new Blob([bytes]).stream().pipeThrough(cs);
+	return new Uint8Array(await new Response(stream).arrayBuffer());
+  }catch{
+	const{gzipSync}=await import(CDN.fflate);
+	return gzipSync(bytes);
+  }
+}
+function walkFS(FS,dir,prefix,out){
+  for(const name of FS.readdir(dir)){
+	if(name==='.'||name==='..')continue;
+	const full=dir==='/'?`/${name}`:`${dir}/${name}`;
+	const stat=FS.stat(full);
+	if(FS.isDir(stat.mode))walkFS(FS,full,`${prefix}${name}/`,out);
+	else out.push({path:`${prefix}${name}`,bytes:FS.readFile(full)});
+  }
+}
+function cleanFsDir(FS,path){
+  try{
+	for(const name of FS.readdir(path)){
+	  if(name==='.'||name==='..')continue;
+	  const full=`${path}/${name}`;
+	  const stat=FS.stat(full);
+	  if(FS.isDir(stat.mode))cleanFsDir(FS,full);
+	  else FS.unlink(full);
+	}
+	FS.rmdir(path);
+  }catch{}
+}
+function refreshClearBtn(){
+  clearBtn.style.display=(queue.length||resultCache.length)?'':'none';
+}
+
+/* ==================== 懒加载器（失败可重试） ==================== */
+async function getSevenZip(){
+  if(sevenZipInstance)return sevenZipInstance;
+  if(sevenZipLoading)return sevenZipLoading;
+  sevenZipLoading=(async()=>{
+	try{
+	  setStatus('正在加载 7z 引擎…');
+	  const SevenZip=(await import(CDN.sevenZip)).default;
+	  sevenZipInstance=await SevenZip({locateFile:p=>p.endsWith('.wasm')?CDN.sevenZipWasm:p});
+	  setStatus('');
+	  return sevenZipInstance;
+	}catch(err){
+	  sevenZipLoading=null;
+	  setStatus(`7z 引擎加载失败：${friendlyError(err)}`,'error');
+	  throw err;
+	}
+  })();
+  return sevenZipLoading;
+}
+async function getFFmpeg(){
+  if(ffmpegInstance)return ffmpegInstance;
+  if(ffmpegLoading)return ffmpegLoading;
+  ffmpegLoading=(async()=>{
+	try{
+	  setStatus('正在加载媒体引擎（约 31 MB）…');
+	  const{FFmpeg}=await import(CDN.ffmpeg);
+	  const{toBlobURL}=await import(CDN.ffmpegUtil);
+	  const ff=new FFmpeg();
+	  await ff.load({
+		coreURL:await toBlobURL(`${CDN.ffmpegCore}/ffmpeg-core.js`,'text/javascript'),
+		wasmURL:await toBlobURL(`${CDN.ffmpegCore}/ffmpeg-core.wasm`,'application/wasm'),
+	  });
+	  ff.on('progress',({progress})=>{
+		const pct=Math.min(100,Math.max(0,Math.round(progress*100)));
+		const cur=queue[curIdx];
+		if(cur&&cur.type==='media'&&cur.status==='converting'){
+		  wizProgress.textContent=`转换中 ${pct}%`;
+		  wizProgressFill.style.width=pct+'%';
+		}
+	  });
+	  ffmpegInstance=ff;
+	  setStatus('');
+	  return ff;
+	}catch(err){
+	  ffmpegLoading=null;
+	  setStatus(`媒体引擎加载失败：${friendlyError(err)}`,'error');
+	  throw err;
+	}
+  })();
+  return ffmpegLoading;
+}
+/* ==================== 自定义下拉 ==================== */
+let openDropdown=null;
+function createDropdown(options,currentValue,onChange){
+  const dd=document.createElement('div');
+  dd.className='dd';
+  dd.innerHTML=`<button class="dd-trigger" type="button"><span class="dd-label"></span><span class="dd-arrow">▾</span></button><ul class="dd-menu" role="listbox"></ul>`;
+  const trigger=dd.querySelector('.dd-trigger');
+  const label=dd.querySelector('.dd-label');
+  const menu=dd.querySelector('.dd-menu');
+  let current=currentValue||options[0]?.value;
+
+  function buildMenu(){
+	menu.innerHTML='';
+	let lastGroup=null;
+	for(const opt of options){
+	  if(opt.group&&opt.group!==lastGroup){
+		const g=document.createElement('li');
+		g.className='dd-group';
+		g.textContent=opt.group;
+		menu.appendChild(g);
+		lastGroup=opt.group;
+	  }
+	  const li=document.createElement('li');
+	  li.className='dd-item'+(opt.value===current?' selected':'');
+	  li.dataset.value=opt.value;
+	  li.textContent=opt.label;
+	  li.addEventListener('click',e=>{
+		e.stopPropagation();
+		current=opt.value;
+		dd.dataset.value=current;
+		label.textContent=opt.label;
+		dd.classList.remove('open');
+		openDropdown=null;
+		buildMenu();
+		onChange?.(current);
+	  });
+	  menu.appendChild(li);
+	}
+  }
+  function updateLabel(){
+	const opt=options.find(o=>o.value===current);
+	label.textContent=opt?.label||current||'请选择';
+  }
+  trigger.addEventListener('click',e=>{
+	e.stopPropagation();
+	if(openDropdown&&openDropdown!==dd)openDropdown.classList.remove('open');
+	dd.classList.toggle('open');
+	openDropdown=dd.classList.contains('open')?dd:null;
+  });
+  dd.dataset.value=current;
+  updateLabel();
+  buildMenu();
+  dd.setValue=v=>{current=v;dd.dataset.value=v;updateLabel();buildMenu()};
+  return dd;
+}
+document.addEventListener('click',()=>{
+  if(openDropdown){openDropdown.classList.remove('open');openDropdown=null}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&openDropdown){openDropdown.classList.remove('open');openDropdown=null}
+});
+
+/* ==================== 格式选项 ==================== */
+function mediaFormatOptions(kind){
+  if(kind==='image')return IMAGE_FMTS.map(f=>({value:f,label:FORMAT_LABELS[f]||f,group:'图片格式'}));
+  if(kind==='video'){
+	const v=VIDEO_FMTS.map(f=>({value:f,label:FORMAT_LABELS[f]||f,group:'视频格式'}));
+	const a=AUDIO_FMTS.map(f=>({value:f,label:FORMAT_LABELS[f]+'（抽音轨）',group:'提取音频'}));
+	const fr=[{value:'__frames__',label:FORMAT_LABELS.__frames__,group:'转为图片序列'}];
+	return [...v,...a,...fr];
+  }
+  if(kind==='audio')return AUDIO_FMTS.map(f=>({value:f,label:FORMAT_LABELS[f]||f,group:'音频格式'}));
+  return [];
+}
+function packFormatOptions(){
+  return PACK_FMTS.map(f=>({value:f,label:FORMAT_LABELS[f]||f}));
+}
+function frameFormatOptions(){
+  return FRAME_IMAGE_FMTS.map(f=>({value:f,label:FORMAT_LABELS[f]||f}));
+}
+function defaultFormat(kind){
+  return{image:'webp',video:'mp4',audio:'mp3'}[kind]||'zip';
+}
+function isLossless(fmt){return LOSSLESS_OUT.has(fmt)}
+
+/* ==================== 队列构建（累加模式） ==================== */
+async function buildQueueFromFiles(incoming){
+  const seen=new Set(queue.filter(q=>q.type==='media').map(q=>q.name+':'+q.size));
+  const seenArchives=new Set(queue.filter(q=>q.type==='pack'&&q.isTop).map(q=>q.name+':'+q.size));
+  let added=false;
+  for(const f of incoming){
+	const ext=(f.name.split('.').pop()||'').toLowerCase();
+	if(ARCHIVE_EXTS.includes(ext)){
+	  const archKey=f.name+':'+f.size;
+	  if(seenArchives.has(archKey))continue;
+	  seenArchives.add(archKey);
+	  await expandArchive(f,null,'');
+	  added=true;
+	} else {
+	  const kind=mediaKind(f);
+	  if(!kind)continue;
+	  const key=f.name+':'+f.size;
+	  if(seen.has(key))continue;
+	  seen.add(key);
+	  queue.push({
+		type:'media',kind,file:f,path:f.name,name:f.name,size:f.size,
+		format:defaultFormat(kind),quality:82,status:'pending',outputBlob:null,errorMsg:null,
+	  });
+	  added=true;
+	}
+  }
+  if(added&&queue.length>0){
+	if(curIdx>=queue.length)curIdx=Math.max(0,queue.length-1);
+	wizard.classList.add('show');
+	renderWizard();
+	refreshClearBtn();
+  }
+}
+
+/* ==================== 压缩包展开 ==================== */
+async function expandArchive(file,parentNodeId,parentPath){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  setStatus(`正在解压 ${file.name}…`);
+  let collected=[];
+  try{
+	if(ext==='zip'){
+	  const{unzipSync}=await import(CDN.fflate);
+	  collected=Object.entries(unzipSync(new Uint8Array(await file.arrayBuffer())))
+		.map(([p,bytes],idx)=>({path:p.replace(/\\/g,'/'),bytes,order:idx}));
+	} else {
+	  const sz=await getSevenZip();
+	  const tmp=`/e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+	  sz.FS.mkdir(tmp);
+	  sz.FS.writeFile(`${tmp}/in.${ext}`,new Uint8Array(await file.arrayBuffer()));
+	  try{sz.callMain(['x',`${tmp}/in.${ext}`,'-o'+tmp,'-y'])}catch{}
+	  const raw=[];
+	  walkFS(sz.FS,tmp,'',raw);
+	  collected=raw.filter(c=>c.path!==`in.${ext}`&&!c.path.startsWith('in/'));
+	  cleanFsDir(sz.FS,tmp);
+	}
+  }catch(err){
+	setStatus(`解压失败：${friendlyError(err)}`,'error');
+	return null;
+  }
+  collected=collected.filter(c=>c.path&&!c.path.endsWith('/')&&!c.path.startsWith('__MACOSX/')&&!c.path.includes('/._')&&c.path.split('/').pop()!=='.DS_Store');
+
+  const nodeId=++nodeIdCounter;
+  const node={
+	id:nodeId,name:file.name.replace(/\.[^.]+$/,''),originalFormat:ext,
+	parentId:parentNodeId,pathInParent:parentPath,
+	children:[],files:[],passthrough:[],
+  };
+  nodeMap.set(nodeId,node);
+
+  queue.push({
+	type:'pack',nodeId,name:file.name,size:file.size,originalFormat:ext,isTop:parentNodeId===null,
+	packFormat:ext==='rar'?'zip':(PACK_FMTS.includes(ext)?ext:'zip'),
+	status:'pending',outputBlob:null,errorMsg:null,
+  });
+
+  const mediaItems=[];
+  const childArchives=[];
+  for(const{path,bytes}of collected){
+	const fileName=path.split('/').pop();
+	const fileExt=(fileName.split('.').pop()||'').toLowerCase();
+	const fullPath=`${parentPath?parentPath+'/':''}${path}`;
+	if(ARCHIVE_EXTS.includes(fileExt)){
+	  childArchives.push({bytes,fileName,fullPath,fileExt});
+	  continue;
+	}
+	const kind=mediaKind(new File([bytes],fileName));
+	if(kind){
+	  const item={
+		type:'media',kind,file:new File([bytes],fileName,{type:guessMime(fileExt)}),
+		path:fullPath,name:fileName,size:bytes.length,
+		format:defaultFormat(kind),quality:82,status:'pending',outputBlob:null,errorMsg:null,
+		topArchiveId:node.topArchiveId,
+	  };
+	  mediaItems.push(item);
+	  node.files.push(item);
+	} else {
+	  node.passthrough.push({path,bytes});
+	}
+  }
+  for(const m of mediaItems)queue.push(m);
+  for(const child of childArchives){
+	const subFile=new File([child.bytes],child.fileName,{type:guessMime(child.fileExt)});
+	const childId=await expandArchive(subFile,nodeId,child.fullPath);
+	if(childId)node.children.push(childId);
+  }
+  setStatus('');
+  return nodeId;
+}
+
+/* ==================== 单文件移除 + 节点清理（Radiant 恢复） ==================== */
+function removeFile(idx){
+  if(idx<0||idx>=queue.length||converting)return;
+  const item=queue[idx];
+  if(item.status==='converting')return;
+
+  if(item.type==='pack'&&item.nodeId){
+	const indices=new Set();
+	const collect=(nid)=>{
+	  const n=nodeMap.get(nid);
+	  if(!n)return;
+	  for(let i=0;i<queue.length;i++){
+		const q=queue[i];
+		if(q.type==='pack'&&q.nodeId===nid)indices.add(i);
+		else if(q.type==='media'&&q.path){
+		  const prefix=n.pathInParent?n.pathInParent+'/':'';
+		  const match=prefix===''?q.topArchiveId===n.id:q.path.startsWith(prefix);
+		  if(match)indices.add(i);
+		}
+	  }
+	  for(const cid of n.children)collect(cid);
+	};
+	collect(item.nodeId);
+	[...indices].sort((a,b)=>b-a).forEach(i=>queue.splice(i,1));
+	const del=(nid)=>{
+	  const n=nodeMap.get(nid);
+	  if(!n)return;
+	  for(const cid of n.children)del(cid);
+	  nodeMap.delete(nid);
+	};
+	del(item.nodeId);
+  } else {
+	queue.splice(idx,1);
+	if(item.topArchiveId)cleanupEmptyNode(item.topArchiveId);
+  }
+
+  if(curIdx>=queue.length)curIdx=Math.max(0,queue.length-1);
+  if(!queue.length)wizard.classList.remove('show');
+  else renderWizard();
+  renderResults();
+  refreshClearBtn();
+}
+
+function cleanupEmptyNode(nodeId){
+  const node=nodeMap.get(nodeId);
+  if(!node)return;
+  const hasMedia=queue.some(q=>{
+	if(q.type!=='media'||!q.path)return false;
+	const prefix=node.pathInParent?node.pathInParent+'/':'';
+	return prefix===''?q.topArchiveId===node.id:q.path.startsWith(prefix);
+  });
+  const hasChild=node.children.some(cid=>nodeMap.has(cid));
+  const hasPassthrough=node.passthrough.length>0;
+  if(hasMedia||hasChild||hasPassthrough)return;
+  nodeMap.delete(nodeId);
+  if(node.parentId!==null)cleanupEmptyNode(node.parentId);
+}
+
+/* ==================== 向导渲染 ==================== */
+function renderWizard(){
+  const cur=queue[curIdx];
+  if(!cur){wizard.classList.remove('show');refreshClearBtn();return}
+  wizard.classList.add('show');
+
+  if(framesDetails.open){
+	const panelOwner=framesDetails.dataset.owner;
+	const curKey=queue[curIdx]?queue[curIdx].name+':'+queue[curIdx].size:'';
+	if(panelOwner!==curKey||queue[curIdx]?.format!=='__frames__'){
+	  framesDetails.open=false;
+	  delete framesDetails.dataset.owner;
+	}
+  }
+
+  const icnMap={image:'📷',video:'🎬',audio:'🎵'};
+  wizIcon.textContent=cur.type==='pack'?'📦':icnMap[cur.kind]||'📄';
+  wizName.textContent=cur.name;
+  wizStep.textContent=`${curIdx+1} / ${queue.length}`;
+
+  let rmBtn=document.getElementById('wizRemoveBtn');
+  if(!rmBtn){
+	rmBtn=document.createElement('button');
+	rmBtn.id='wizRemoveBtn';
+	rmBtn.className='wiz-rm';
+	rmBtn.textContent='×';
+	rmBtn.title='从队列移除';
+	document.querySelector('.wiz-head').appendChild(rmBtn);
+  }
+  rmBtn.onclick=()=>removeFile(curIdx);
+  rmBtn.disabled=converting||cur.status==='converting';
+
+  ddSlot.innerHTML='';
+  packDdSlot.innerHTML='';
+  frameFmtSlot.innerHTML='';
+  framePackSlot.innerHTML='';
+
+  const rowF=$('rowFormat'),rowQ=$('rowQuality'),rowP=$('rowPack');
+  const rowFF=$('rowFrameFormat'),rowFP=$('rowFramePack'),rowFI=$('rowFrameInfo');
+
+  const isFramesMode=cur.type==='media'&&cur.kind==='video'&&cur.format==='__frames__';
+
+  if(cur.type==='media'){
+	rowF.style.display='';
+	rowQ.style.display='';
+	rowP.style.display='none';
+	const dd=createDropdown(mediaFormatOptions(cur.kind),cur.format,v=>{
+	  cur.format=v;
+	  renderWizard();
+	});
+	ddSlot.appendChild(dd);
+	qualitySlider.value=cur.quality;
+	qualityVal.textContent=cur.quality;
+	updateQualityRow();
+  } else {
+	rowF.style.display='none';
+	rowQ.style.display='none';
+	rowP.style.display='';
+	const dd=createDropdown(packFormatOptions(),cur.packFormat,v=>{cur.packFormat=v});
+	packDdSlot.appendChild(dd);
+  }
+
+  if(isFramesMode){
+	if(!cur.frameFormat)cur.frameFormat='webp';
+	if(!cur.framePackFormat)cur.framePackFormat='zip';
+	if(!cur.frameOverrides)cur.frameOverrides={};
+
+	rowFF.style.display='';
+	rowFP.style.display='';
+	rowFI.style.display='';
+
+	const ddF=createDropdown(frameFormatOptions(),cur.frameFormat,v=>{
+	  cur.frameFormat=v;
+	  if(framesDetails.open)renderFramesList(cur);
+	  updateFrameQualityRow();
+	});
+	frameFmtSlot.appendChild(ddF);
+
+	const ddP=createDropdown(packFormatOptions(),cur.framePackFormat,v=>{cur.framePackFormat=v});
+	framePackSlot.appendChild(ddP);
+
+	if(cur.frameCount!=null&&cur.frameCount>0){
+	  frameCountText.textContent=`共 ${cur.frameCount} 帧`;
+	  if(cur.frameCount<=200){
+		framesDetails.style.display='';
+		frameCountLabel.textContent=cur.frameCount;
+		if(framesDetails.open)renderFramesList(cur);
+		else framesList.innerHTML='';
+	  }else{
+		framesDetails.style.display='none';
+		frameCountText.textContent=`共 ${cur.frameCount} 帧（超过 200 帧，仅支持统一格式）`;
+	  }
+	}else{
+	  frameCountText.textContent='点击右侧按钮读取帧数';
+	  framesDetails.style.display='none';
+	}
+
+	updateFrameQualityRow();
+  } else {
+	rowFF.style.display='none';
+	rowFP.style.display='none';
+	rowFI.style.display='none';
+	framesDetails.style.display='none';
+  }
+
+  prevBtn.disabled=curIdx===0||converting;
+  nextBtn.disabled=curIdx===queue.length-1||converting;
+  convertBtn.style.display=cur.type==='media'?'':'none';
+  packBtn.style.display=cur.type==='pack'?'':'none';
+  convertBtn.disabled=cur.status==='converting'||converting;
+  packBtn.disabled=converting;
+
+  wizProgress.style.display='none';
+  wizProgressBar.classList.remove('show');
+  wizProgressFill.style.width='0%';
+
+  clearBtn.disabled=converting;
+  downloadAllBtn.disabled=converting||!resultCache.some(r=>r.status==='done'&&r.outputBlob);
+}
+
+function updateQualityRow(){
+  const cur=queue[curIdx];
+  if(!cur||cur.type!=='media')return;
+  const lossless=isLossless(cur.format);
+  qualityRow.classList.toggle('disabled',lossless);
+  qualitySlider.disabled=lossless;
+}
+function updateFrameQualityRow(){
+  const cur=queue[curIdx];
+  if(!cur||cur.format!=='__frames__')return;
+  const lossless=isLossless(cur.frameFormat);
+  qualityRow.classList.toggle('disabled',lossless);
+  qualitySlider.disabled=lossless;
+}
+
+function renderFramesList(item){
+  framesList.innerHTML='';
+  const n=Math.min(item.frameCount||0,200);
+  const baseName=item.name.replace(/\.[^.]+$/,'');
+  for(let i=0;i<n;i++){
+	const row=document.createElement('div');
+	row.className='frame-item';
+	const nameEl=document.createElement('span');
+	nameEl.className='frame-name';
+	nameEl.textContent=`${baseName}_frame_${String(i+1).padStart(4,'0')}`;
+	row.appendChild(nameEl);
+	const curFmt=item.frameOverrides[i]||item.frameFormat;
+	const dd=createDropdown(frameFormatOptions(),curFmt,v=>{
+	  item.frameOverrides[i]=v;
+	});
+	dd.style.minWidth='100px';
+	row.appendChild(dd);
+	framesList.appendChild(row);
+  }
+}
+
+qualitySlider.addEventListener('input',()=>{
+  const cur=queue[curIdx];
+  if(cur&&cur.type==='media'){
+	cur.quality=Number(qualitySlider.value);
+	qualityVal.textContent=cur.quality;
+  }
+});
+
+framesDetails.addEventListener('toggle',()=>{
+  const cur=queue[curIdx];
+  if(framesDetails.open&&cur&&cur.frameCount&&cur.frameCount<=200){
+	framesDetails.dataset.owner=cur.name+':'+cur.size;
+	renderFramesList(cur);
+  }
+});
+
+probeFramesBtn.addEventListener('click',async()=>{
+  const cur=queue[curIdx];
+  if(!cur||cur.format!=='__frames__'||converting)return;
+  converting=true;
+  probeFramesBtn.disabled=true;
+  frameCountText.textContent='正在读取帧数…';
+  renderWizard();
+  try{
+	const n=await probeVideoFrames(cur);
+	frameCountText.textContent=`共 ${n} 帧`;
+  }catch(err){
+	console.error(err);
+	frameCountText.textContent=`读取失败：${friendlyError(err)}`;
+  }finally{
+	converting=false;
+	probeFramesBtn.disabled=false;
+	renderWizard();
+  }
+});
+
+/* ==================== 导航 ==================== */
+prevBtn.addEventListener('click',()=>{
+  if(converting)return;
+  if(curIdx>0){curIdx--;renderWizard()}
+});
+nextBtn.addEventListener('click',()=>{
+  if(converting)return;
+  if(curIdx<queue.length-1){curIdx++;renderWizard()}
+});
+
+/* ==================== 清空 ==================== */
+clearBtn.addEventListener('click',()=>{
+  if(converting)return;
+  queue=[];
+  curIdx=0;
+  nodeMap=new Map();
+  nodeIdCounter=0;
+  resultCache.length=0;
+  wizard.classList.remove('show');
+  results.classList.remove('show');
+  resultList.innerHTML='';
+  setStatus('');
+  refreshClearBtn();
+});
+
+/* ==================== 文件输入 ==================== */
+const fileInput=document.createElement('input');
+fileInput.type='file';
+fileInput.multiple=true;
+fileInput.accept=['image/*','video/*','audio/*',
+  ...ARCHIVE_EXTS.map(e=>'.'+e),
+  ...IMAGE_EXTS.map(e=>'.'+e),
+  ...VIDEO_EXTS.map(e=>'.'+e),
+  ...AUDIO_EXTS.map(e=>'.'+e)].join(',');
+dropZone.addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',()=>{buildQueueFromFiles([...fileInput.files]);fileInput.value=''});
+
+let dragDepth=0;
+window.addEventListener('dragenter',e=>{if(e.dataTransfer?.types?.includes('Files')){dragDepth++;dropOverlay.classList.add('show')}});
+window.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files'))e.preventDefault()});
+window.addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)dropOverlay.classList.remove('show')});
+window.addEventListener('drop',async e=>{
+  if(!e.dataTransfer?.types?.includes('Files'))return;
+  e.preventDefault();dragDepth=0;dropOverlay.classList.remove('show');
+  const items=[...(e.dataTransfer.items||[])],collected=[];
+  for(const item of items){
+	if(item.kind!=='file')continue;
+	const entry=item.webkitGetAsEntry?.();
+	if(entry?.isDirectory)await collectDir(entry,collected);
+	else{const f=item.getAsFile();if(f)collected.push(f)}
+  }
+  buildQueueFromFiles(collected.length?collected:[...e.dataTransfer.files]);
+});
+async function collectDir(dirEntry,out){
+  const reader=dirEntry.createReader();
+  while(true){
+	const entries=await new Promise((res,rej)=>reader.readEntries(res,rej));
+	if(!entries.length)break;
+	for(const entry of entries){
+	  if(entry.isDirectory)await collectDir(entry,out);
+	  else out.push(await new Promise((res,rej)=>entry.file(res,rej)));
+	}
+  }
+}
+
+/* ==================== URL 导入 ==================== */
+addUrlBtn.addEventListener('click',handleUrlImport);
+urlInput.addEventListener('keydown',e=>{if(e.key==='Enter')handleUrlImport()});
+async function handleUrlImport(){
+  const raw=urlInput.value.trim();
+  if(!raw)return;
+  try{const url=new URL(raw);if(!/^https?:$/.test(url.protocol))throw 0}catch{setStatus('无效链接','error');return}
+  addUrlBtn.disabled=true;setStatus('正在下载…');
+  try{
+	const proxy=proxyInput.value.trim();
+	const target=proxy?proxy+encodeURIComponent(raw):raw;
+	const res=await fetch(target,{mode:'cors',credentials:'omit'});
+	if(!res.ok)throw new Error(`HTTP ${res.status}`);
+	if((res.headers.get('content-type')||'').includes('text/html'))throw new Error('链接返回网页而非文件');
+	const blob=await res.blob();
+	if(!blob.size)throw new Error('文件为空');
+	const filename=(new URL(raw).pathname.split('/').pop()||'').split('?')[0]||'remote-file';
+	const file=new File([blob],filename,{type:blob.type||guessMime((filename.split('.').pop()||'').toLowerCase())});
+	await buildQueueFromFiles([file]);
+	setStatus(`已添加 ${filename}`,'ok');
+	urlInput.value='';
+  }catch(err){setStatus(err.message,'error')}
+  finally{addUrlBtn.disabled=false}
+}
+
+/* ==================== 粘贴 ==================== */
+document.addEventListener('paste',e=>{
+  const picked=[];
+  for(const item of [...(e.clipboardData?.items||[])]){
+	if(item.kind!=='file')continue;
+	const f=item.getAsFile();if(!f)continue;
+	const ext=(f.type.split('/')[1]||'png').replace('jpeg','jpg');
+	picked.push(new File([f],f.name&&f.name!=='image.png'?f.name:`paste-${Date.now()}.${ext}`,{type:f.type}));
+  }
+  if(picked.length)buildQueueFromFiles(picked);
+});
+/* ==================== 图片公共辅助 ==================== */
+async function toBitmap(id){
+  const c=new OffscreenCanvas(id.width,id.height);
+  c.getContext('2d').putImageData(id,0,0);
+  return createImageBitmap(c);
+}
+function px(b){
+  const c=new OffscreenCanvas(b.width,b.height);
+  const ctx=c.getContext('2d');
+  ctx.drawImage(b,0,0);
+  return{d:ctx.getImageData(0,0,b.width,b.height).data,w:b.width,h:b.height};
+}
+async function bitmapToBlob(b,mime,q){
+  const c=new OffscreenCanvas(b.width,b.height),ctx=c.getContext('2d');
+  if(mime==='image/jpeg'){ctx.fillStyle='#ffffff';ctx.fillRect(0,0,b.width,b.height)}
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(b,0,0);
+  return c.convertToBlob({type:mime,quality:q});
+}
+
+/* ==================== 手写解码器 ==================== */
+function decodePNM(ab){
+  const bytes=new Uint8Array(ab),text=new TextDecoder('ascii').decode(bytes),t=[];
+  let i=0,hEnd=0;
+  while(t.length<4&&i<text.length){
+	while(i<text.length&&/\s/.test(text[i]))i++;
+	if(text[i]==='#'){while(i<text.length&&text[i]!=='\n')i++;continue}
+	const s=i;while(i<text.length&&!/\s/.test(text[i]))i++;
+	t.push(text.slice(s,i));
+	hEnd=i;
+  }
+  const m=t[0],w=+t[1],h=+t[2];
+  const isBit=m==='P1'||m==='P4';
+  const isAscii=m==='P1'||m==='P2'||m==='P3';
+  const isGray=m==='P1'||m==='P2'||m==='P4'||m==='P5';
+  const mv=isBit?1:(t[3]?+t[3]:255);
+  let ds=hEnd;
+  while(ds<bytes.length&&[10,13,32].includes(bytes[ds]))ds++;
+  const id=new ImageData(w,h),d=id.data;
+
+  if(isBit){
+	const ascii=isAscii?text.slice(ds).trim().split(/\s+/).map(Number):null;
+	const rb=Math.ceil(w/8);
+	for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+	  let v;
+	  if(isAscii){v=ascii[y*w+x]?0:255}
+	  else{const bit=(bytes[ds+y*rb+Math.floor(x/8)]>>(7-(x%8)))&1;v=bit?0:255}
+	  const p=y*w+x;
+	  d[p*4]=d[p*4+1]=d[p*4+2]=v;d[p*4+3]=255;
+	}
+	return id;
+  }
+
+  const pxData=isAscii?text.slice(ds).trim().split(/\s+/).map(Number):null;
+  const sample=(k)=>(isAscii?pxData[k]:bytes[ds+k])/mv*255;
+
+  if(isGray){
+	for(let i=0;i<w*h;i++){const v=sample(i);d[i*4]=d[i*4+1]=d[i*4+2]=v;d[i*4+3]=255}
+  }else{
+	for(let i=0;i<w*h;i++){d[i*4]=sample(i*3);d[i*4+1]=sample(i*3+1);d[i*4+2]=sample(i*3+2);d[i*4+3]=255}
+  }
+  return id;
+}
+function decodePAM(ab){
+  const bytes=new Uint8Array(ab),mk=new TextEncoder().encode('ENDHDR\n');
+  let he=-1;
+  for(let i=0;i<Math.min(bytes.length,2048);i++){
+	let ok=true;for(let j=0;j<mk.length;j++)if(bytes[i+j]!==mk[j]){ok=false;break}
+	if(ok){he=i+mk.length;break}
+  }
+  if(he<0)throw new Error('无效 PAM 头');
+  const ht=new TextDecoder('ascii').decode(bytes.slice(0,he)),g=k=>parseInt((ht.match(new RegExp(k+'\\s+(\\d+)'))||[])[1]);
+  const w=g('WIDTH'),h=g('HEIGHT'),depth=g('DEPTH')||3,mv=g('MAXVAL')||255;
+  const pd=bytes.slice(he),id=new ImageData(w,h),d=id.data,s=255/mv;
+  for(let i=0;i<w*h;i++){
+	const base=i*depth,r=pd[base],gg=depth>=2?pd[base+1]:r,b=depth>=3?pd[base+2]:r,a=depth>=4?pd[base+3]:255;
+	d[i*4]=r*s;d[i*4+1]=gg*s;d[i*4+2]=b*s;d[i*4+3]=a*s;
+  }
+  return id;
+}
+function decodePCX(ab){
+  const bytes=new Uint8Array(ab),v=new DataView(ab);
+  if(bytes[0]!==10)throw new Error('不是有效的 PCX');
+  const bpp=bytes[3],w=v.getUint16(8,true)-v.getUint16(4,true)+1,h=v.getUint16(10,true)-v.getUint16(6,true)+1;
+  const np=bytes[65],bpl=v.getUint16(66,true),pd=[];
+  let i=128;const tb=bpl*h*np;
+  while(pd.length<tb&&i<bytes.length){
+	const b=bytes[i++];
+	if((b&0xC0)===0xC0){const cnt=b&0x3F,val=bytes[i++];for(let k=0;k<cnt;k++)pd.push(val)}
+	else pd.push(b);
+  }
+  const rgba=new Uint8ClampedArray(w*h*4);
+  if(np===3&&bpp===8)for(let y=0;y<h;y++)for(let x=0;x<w;x++){const idx=y*bpl*3+x,p=(y*w+x)*4;rgba[p]=pd[idx];rgba[p+1]=pd[idx+bpl];rgba[p+2]=pd[idx+bpl*2];rgba[p+3]=255}
+  else if(np===1&&bpp===8){const pal=bytes.slice(bytes.length-768);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const ci=pd[y*bpl+x],p=(y*w+x)*4;rgba[p]=pal[ci*3];rgba[p+1]=pal[ci*3+1];rgba[p+2]=pal[ci*3+2];rgba[p+3]=255}}
+  else throw new Error('不支持的 PCX 位深/平面组合');
+  return new ImageData(rgba,w,h);
+}
+function decodeXBM(text){
+  const w=parseInt(text.match(/#define\s+\w+_width\s+(\d+)/)?.[1]),h=parseInt(text.match(/#define\s+\w+_height\s+(\d+)/)?.[1]);
+  if(!w||!h)throw new Error('无效的 XBM');
+  const hb=(text.match(/0x[0-9a-fA-F]{2}/g)||[]).map(x=>parseInt(x,16));
+  if(!hb.length)throw new Error('XBM 无像素数据');
+  const rb=Math.ceil(w/8),rgba=new Uint8ClampedArray(w*h*4);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const bit=(hb[y*rb+Math.floor(x/8)]>>(x%8))&1,v=bit?0:255,p=(y*w+x)*4;rgba[p]=rgba[p+1]=rgba[p+2]=v;rgba[p+3]=255}
+  return new ImageData(rgba,w,h);
+}
+function decodeXPM(text){
+  const hd=text.match(/"(\d+)\s+(\d+)\s+(\d+)\s+(\d+)"/);
+  if(!hd)throw new Error('无效的 XPM');
+  const w=+hd[1],h=+hd[2],cc=+hd[3],cpp=+hd[4],ls=text.split('\n').map(l=>l.trim());
+  let i=ls.findIndex(l=>l.includes(`"${w} ${h} ${cc}`))+1;
+  const pal={};
+  for(let c=0;c<cc;c++){const m=ls[i+c].match(/"(.+?)\s+c\s+(#\w+)"/);if(m)pal[m[1]]=m[2]}
+  i+=cc;
+  const rgba=new Uint8ClampedArray(w*h*4);
+  for(let y=0;y<h;y++){
+	const row=ls[i+y].match(/"(.+)"/)[1];
+	for(let x=0;x<w;x++){const key=row.substr(x*cpp,cpp),hex=pal[key]||'#000000',p=(y*w+x)*4;rgba[p]=parseInt(hex.slice(1,3),16);rgba[p+1]=parseInt(hex.slice(3,5),16);rgba[p+2]=parseInt(hex.slice(5,7),16);rgba[p+3]=255}
+  }
+  return new ImageData(rgba,w,h);
+}
+function decodePVR(ab){
+  const v=new DataView(ab);
+  if(v.getUint32(0,true)!==0x03525650)throw new Error('不是有效的 PVR v3');
+  const pf=v.getUint32(8,true),h=v.getUint32(20,true),w=v.getUint32(24,true);
+  if(pf===0x15||pf===0x0808080861626772){
+	const rgba=new Uint8ClampedArray(w*h*4);
+	rgba.set(new Uint8Array(ab).slice(52,52+w*h*4));
+	return new ImageData(rgba,w,h);
+  }
+  throw new Error('暂不支持此 PVR 压缩');
+}
+async function decodeRaw(f){
+  setStatus('正在解码 RAW（可能耗时较长，请勿操作）…');
+  await new Promise(r=>setTimeout(r,50));
+  try{
+	const{RawConvert}=await import(CDN.raw);
+	const rc=await RawConvert.init();
+	rc.load(await getArrayBuffer(f),f.name);
+	const p=rc.process({colorSpace:'srgb',halfSize:true});
+	rc.dispose();
+	const rgba=new Uint8ClampedArray(p.data.length/3*4);
+	for(let i=0,j=0;i<p.data.length;i+=3,j+=4){rgba[j]=p.data[i];rgba[j+1]=p.data[i+1];rgba[j+2]=p.data[i+2];rgba[j+3]=255}
+	setStatus('');
+	return toBitmap(new ImageData(rgba,p.width,p.height));
+  }catch(err){setStatus('');throw err}
+}
+async function decodeTexture(f,ext){
+  const{parseDDSHeader,parseKTXHeader,parseKTX2Header,decodeImage}=await import(CDN.dds);
+  const bytes=new Uint8Array(await getArrayBuffer(f));
+  const info=ext==='dds'?parseDDSHeader(bytes):ext==='ktx'?parseKTXHeader(bytes):parseKTX2Header(bytes);
+  if(!info)throw new Error('无法解析纹理头');
+  const layer=info.layers.find(l=>l.level===0)||info.layers[0];
+  const rgba=decodeImage(bytes,info.format,{...layer,offset:0});
+  return toBitmap(new ImageData(new Uint8ClampedArray(rgba),info.shape.width,info.shape.height));
+}
+
+/* ==================== HTJ2K / T2D 懒加载 ==================== */
+let htj2kMod=null;
+async function getHtj2k(){
+  if(htj2kMod)return htj2kMod;
+  const mod=await import(CDN.htj2k);
+  if(typeof mod.setPipelinesBaseUrl==='function'){
+	mod.setPipelinesBaseUrl('https://cdn.jsdmirror.com/npm/@itk-wasm/htj2k@2.3.1/dist/pipelines');
+  }
+  if(typeof mod.setPipelinesWorkerUrl==='function'){
+	mod.setPipelinesWorkerUrl('https://cdn.jsdmirror.com/npm/@itk-wasm/htj2k@2.3.1/dist/pipelines');
+  }
+  htj2kMod=mod;
+  return mod;
+}
+let t2dMod=null;
+async function getT2D(){
+  if(t2dMod)return t2dMod;
+  const mod=await import(CDN.t2d);
+  if(typeof mod.initialize==='function'){
+	await mod.initialize({wasmPath:CDN.t2dWasm});
+  }
+  t2dMod=mod;
+  return mod;
+}
+
+/* ==================== 解码器表 ==================== */
+const DECODERS={
+  heic:async f=>{const{heicTo}=await import(CDN.heic);return createImageBitmap(await heicTo({blob:f,type:'image/jpeg',quality:.95}),{imageOrientation:'from-image'})},
+  heif:async f=>DECODERS.heic(f),
+  svg:async f=>{const u=URL.createObjectURL(new Blob([await f.text()],{type:'image/svg+xml'}));try{const img=new Image();await new Promise((r,j)=>{img.onload=r;img.onerror=j;img.src=u});const c=document.createElement('canvas');c.width=img.naturalWidth||512;c.height=img.naturalHeight||512;c.getContext('2d').drawImage(img,0,0);return createImageBitmap(c)}finally{URL.revokeObjectURL(u)}},
+  tif:async f=>{const U=(await import(CDN.utif)).default||await import(CDN.utif);const b=await getArrayBuffer(f),ifds=U.decode(b);U.decodeImage(b,ifds[0]);return toBitmap(new ImageData(new Uint8ClampedArray(U.toRGBA8(ifds[0])),ifds[0].width,ifds[0].height))},
+  tiff:async f=>DECODERS.tif(f),
+  tga:async f=>{const{decodeTga}=await import(CDN.tga);const d=await decodeTga(new Uint8Array(await getArrayBuffer(f)));return toBitmap(new ImageData(new Uint8ClampedArray(d.image.data),d.image.width,d.image.height))},
+  qoi:async f=>{const{decode}=await import(`${CDN.jsquash}/qoi@1.1.0/decode.js/+esm`);return toBitmap(await decode(await getArrayBuffer(f)))},
+  ppm:async f=>toBitmap(decodePNM(await getArrayBuffer(f))),
+  pgm:async f=>toBitmap(decodePNM(await getArrayBuffer(f))),
+  pbm:async f=>toBitmap(decodePNM(await getArrayBuffer(f))),
+  pnm:async f=>toBitmap(decodePNM(await getArrayBuffer(f))),
+  pam:async f=>toBitmap(decodePAM(await getArrayBuffer(f))),
+  pcx:async f=>toBitmap(decodePCX(await getArrayBuffer(f))),
+  xbm:async f=>toBitmap(decodeXBM(await f.text())),
+  xpm:async f=>toBitmap(decodeXPM(await f.text())),
+  cur:async f=>{const b=await getArrayBuffer(f),v=new DataView(b);if(v.getUint16(2,true)!==2)throw new Error('不是有效的 CUR');const off=v.getUint32(18,true),sz=v.getUint32(14,true);return createImageBitmap(new Blob([b.slice(off,off+sz)],{type:'image/png'}),{imageOrientation:'from-image'})},
+  jp2:async f=>{const mod=await getHtj2k();const r=await mod.decode(new Uint8Array(await getArrayBuffer(f)));return toBitmap(new ImageData(new Uint8ClampedArray(r.data),r.width,r.height))},
+  j2k:async f=>DECODERS.jp2(f),
+  hdr:async f=>{const{readHdr}=await import(CDN.hdrify);const img=readHdr(new Uint8Array(await getArrayBuffer(f)));const{width:w,height:h,data:d}=img;const rgba=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h*4;i++){const v=d[i];rgba[i]=Math.min(255,Math.max(0,(v/(1+v))*255))}return toBitmap(new ImageData(rgba,w,h))},
+  exr:async f=>{const{readExr}=await import(CDN.hdrify);const img=readExr(new Uint8Array(await getArrayBuffer(f)));const{width:w,height:h,data:d}=img;const rgba=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h*4;i++){const v=d[i];rgba[i]=Math.min(255,Math.max(0,(v/(1+v))*255))}return toBitmap(new ImageData(rgba,w,h))},
+  fits:async f=>{const{FITS}=await import(CDN.fitsRead);const fits=await new FITS().readFromBuffer(await getArrayBuffer(f));const img=fits.getImageHDU();const w=fits.width,h=fits.height;let vmin=Infinity,vmax=-Infinity;for(let i=0;i<img.length;i++){if(img[i]<vmin)vmin=img[i];if(img[i]>vmax)vmax=img[i]}const range=vmax-vmin||1;const rgba=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){const v=Math.min(255,Math.max(0,(img[i]-vmin)/range*255));rgba[i*4]=rgba[i*4+1]=rgba[i*4+2]=v;rgba[i*4+3]=255}return toBitmap(new ImageData(rgba,w,h))},
+  fit:async f=>DECODERS.fits(f),fts:async f=>DECODERS.fits(f),
+  dng:async f=>decodeRaw(f),cr2:async f=>decodeRaw(f),cr3:async f=>decodeRaw(f),nef:async f=>decodeRaw(f),arw:async f=>decodeRaw(f),raf:async f=>decodeRaw(f),
+  psd:async f=>{const{readPsd}=await import(CDN.psd);const p=readPsd(await getArrayBuffer(f));if(!p.canvas)throw new Error('PSD 无合成层');return createImageBitmap(p.canvas)},
+  psb:async f=>DECODERS.psd(f),
+  dds:async f=>decodeTexture(f,'dds'),ktx:async f=>decodeTexture(f,'ktx'),ktx2:async f=>decodeTexture(f,'ktx2'),
+  dpx:async f=>{
+	const ff=await getFFmpeg();
+	const inName=`dpxin_${Date.now()}.dpx`;
+	const outName=`dpxout_${Date.now()}.png`;
+	await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(f)));
+	await ff.exec(['-i',inName,'-frames:v','1',outName]);
+	const data=await ff.readFile(outName);
+	await ff.deleteFile(inName).catch(()=>{});
+	await ff.deleteFile(outName).catch(()=>{});
+	return createImageBitmap(new Blob([data.buffer],{type:'image/png'}),{imageOrientation:'from-image'});
+  },
+  astc:async f=>{
+	const b=new Uint8Array(await getArrayBuffer(f));
+	if(new DataView(b.buffer).getUint32(0,true)!==0x5CA1AB13)throw new Error('不是有效的 ASTC');
+	const bx=b[4],by=b[5],w=b[8]|(b[9]<<8)|(b[10]<<16),h=b[12]|(b[13]<<8)|(b[14]<<16);
+	const mod=await getT2D();
+	const rgba=mod.decode_astc(b.slice(16),w,h,bx,by);
+	return toBitmap(new ImageData(new Uint8ClampedArray(rgba),w,h));
+  },
+  pvr:async f=>toBitmap(decodePVR(await getArrayBuffer(f))),
+};
+async function decodeToBitmap(f){
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  return DECODERS[ext]?DECODERS[ext](f):createImageBitmap(f,{imageOrientation:'from-image'});
+}
+/* ==================== 图片编码 ==================== */
+const jsquashInited=new Set();
+async function encodeJsquash(b,fmt,q){
+  const{d,w,h}=px(b);
+  const ver={webp:'1.5.0',avif:'2.1.1',jxl:'1.3.0'};
+  const mod=await import(`${CDN.jsquash}/${fmt}@${ver[fmt]}/encode.js/+esm`);
+  if(!jsquashInited.has(fmt)){
+	if(typeof mod.init==='function')await mod.init();
+	jsquashInited.add(fmt);
+  }
+  const fn=mod.default||mod.encode;
+  if(typeof fn!=='function')throw new Error(`jsquash ${fmt} 编码器导出异常`);
+  const buf=await fn(new ImageData(new Uint8ClampedArray(d),w,h),{quality:q});
+  return new Blob([buf],{type:{webp:'image/webp',avif:'image/avif',jxl:'image/jxl'}[fmt]});
+}
+async function encodeQOI(b){
+  const{d,w,h}=px(b);
+  const mod=await import(`${CDN.jsquash}/qoi@1.1.0/encode.js/+esm`);
+  if(!jsquashInited.has('qoi')){
+	if(typeof mod.init==='function')await mod.init();
+	jsquashInited.add('qoi');
+  }
+  const fn=mod.default||mod.encode;
+  return new Blob([await fn(new ImageData(new Uint8ClampedArray(d),w,h))],{type:'image/qoi'});
+}
+async function encodeTIFF(b){
+  const U=(await import(CDN.utif)).default||await import(CDN.utif);
+  const{d,w,h}=px(b);
+  return new Blob([U.encodeImage(new Uint8Array(d.buffer),w,h)],{type:'image/tiff'});
+}
+async function encodeTGA(b){
+  const{d,w,h}=px(b);
+  const{encodeTga}=await import(CDN.tga);
+  const e=await encodeTga({width:w,height:h,data:new Uint8Array(d.buffer)});
+  return new Blob([e.data],{type:'image/x-tga'});
+}
+function encodePNM(b,type){
+  const{d,w,h}=px(b);
+  const rgb=type==='P6';
+  const hd=new TextEncoder().encode(`${type}\n${w} ${h}\n255\n`);
+  const body=new Uint8Array(w*h*(rgb?3:1));
+  for(let i=0;i<w*h;i++){const r=d[i*4],g=d[i*4+1],bb=d[i*4+2];if(rgb){body[i*3]=r;body[i*3+1]=g;body[i*3+2]=bb}else body[i]=Math.round(.299*r+.587*g+.114*bb)}
+  return new Blob([hd,body],{type:rgb?'image/x-portable-pixmap':'image/x-portable-graymap'});
+}
+function encodePAM(b){
+  const{d,w,h}=px(b);
+  return new Blob([new TextEncoder().encode(`P7\nWIDTH ${w}\nHEIGHT ${h}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n`),new Uint8Array(d.buffer)],{type:'image/x-portable-arbitrarymap'});
+}
+async function encodeICO(b){
+  const sizes=[16,32,48,256].filter(s=>s<=Math.max(b.width,b.height));
+  if(!sizes.includes(16))sizes.push(16);
+  const pngs=[];
+  for(const size of sizes){const c=new OffscreenCanvas(size,size),ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(b,0,0,size,size);pngs.push(await c.convertToBlob({type:'image/png'}))}
+  const hs=6+16*pngs.length;let off=hs;
+  const total=hs+pngs.reduce((s,x)=>s+x.size,0);
+  const buf=new ArrayBuffer(total),v=new DataView(buf),u8=new Uint8Array(buf);
+  v.setUint16(0,0,true);v.setUint16(2,1,true);v.setUint16(4,pngs.length,true);
+  let p=6;
+  pngs.forEach((blob,i)=>{const s=sizes[i];v.setUint8(p,s===256?0:s);v.setUint8(p+1,s===256?0:s);v.setUint8(p+2,0);v.setUint8(p+3,0);v.setUint16(p+4,1,true);v.setUint16(p+6,32,true);v.setUint32(p+8,blob.size,true);v.setUint32(p+12,off,true);p+=16});
+  for(const ab of await Promise.all(pngs.map(x=>x.arrayBuffer()))){u8.set(new Uint8Array(ab),off);off+=ab.byteLength}
+  return new Blob([buf],{type:'image/x-icon'});
+}
+async function encodeCUR(b){
+  const ico=await encodeICO(b);const buf=await ico.arrayBuffer();
+  new DataView(buf).setUint16(2,2,true);
+  return new Blob([buf],{type:'image/x-icon'});
+}
+async function encodeHTJ2K(b,q){
+  const{d,w,h}=px(b);
+  const mod=await getHtj2k();
+  const buf=await mod.encode({data:new Uint8Array(d.buffer),width:w,height:h,components:4},{quality:q});
+  return new Blob([buf],{type:'image/jp2'});
+}
+async function encodeHDR(b){
+  const{d,w,h}=px(b);
+  const f=new Float32Array(d.length);for(let i=0;i<d.length;i++)f[i]=d[i]/255;
+  const{writeHdr}=await import(CDN.hdrify);
+  return new Blob([writeHdr({width:w,height:h,data:f})],{type:'image/vnd.radiance'});
+}
+async function encodeEXR(b){
+  const{d,w,h}=px(b);
+  const f=new Float32Array(d.length);for(let i=0;i<d.length;i++)f[i]=d[i]/255;
+  const{writeExr}=await import(CDN.hdrify);
+  return new Blob([writeExr({width:w,height:h,data:f})],{type:'image/x-exr'});
+}
+async function encodePSD(b){
+  const{writePsd}=await import(CDN.psd);
+  const c=document.createElement('canvas');c.width=b.width;c.height=b.height;c.getContext('2d').drawImage(b,0,0);
+  return new Blob([writePsd({width:b.width,height:b.height,children:[{name:'Layer 0',canvas:c}]})],{type:'image/vnd.adobe.photoshop'});
+}
+async function encodeFITS(b){
+  const{FITS}=await import(CDN.fits2js);
+  const{d,w,h}=px(b);
+  const p=new Float32Array(w*h);
+  for(let i=0;i<p.length;i++){const r=d[i*4],g=d[i*4+1],bb=d[i*4+2];p[i]=(.299*r+.587*g+.114*bb)/255}
+  return new Blob([FITS.fromTypedArray(p,-32,[h,w]).toBuffer()],{type:'application/fits'});
+}
+async function encodeICNS(b){
+  const{encode}=await import(CDN.icns);
+  const sizes=[{s:16,t:'icp4'},{s:32,t:'icp5'},{s:64,t:'icp6'},{s:128,t:'ic07'},{s:256,t:'ic08'},{s:512,t:'ic09'},{s:1024,t:'ic10'}];
+  const entries=[];
+  for(const{s,t}of sizes){if(s>Math.max(b.width,b.height)*2)continue;const c=new OffscreenCanvas(s,s),ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(b,0,0,s,s);entries.push({OSType:t,buffer:await(await c.convertToBlob({type:'image/png'})).arrayBuffer()})}
+  return new Blob([encode(entries)],{type:'image/icns'});
+}
+function encodeDDS(b){
+  const{d,w,h}=px(b);
+  const buf=new ArrayBuffer(128+w*h*4),v=new DataView(buf),u8=new Uint8Array(buf);
+  v.setUint32(0,0x20534444,true);v.setUint32(4,124,true);v.setUint32(8,0x1|0x2|0x4|0x1000|0x80000,true);
+  v.setUint32(12,h,true);v.setUint32(16,w,true);v.setUint32(20,w*h*4,true);v.setUint32(28,1,true);
+  const pf=76;v.setUint32(pf,32,true);v.setUint32(pf+4,0x41,true);v.setUint32(pf+12,32,true);
+  v.setUint32(pf+16,0x00ff0000,true);v.setUint32(pf+20,0x0000ff00,true);v.setUint32(pf+24,0x000000ff,true);v.setUint32(pf+28,0xff000000,true);
+  v.setUint32(108,0x1000,true);
+  for(let i=0;i<w*h;i++){const o=128+i*4;u8[o]=d[i*4+2];u8[o+1]=d[i*4+1];u8[o+2]=d[i*4];u8[o+3]=d[i*4+3]}
+  return new Blob([buf],{type:'image/vnd-ms.dds'});
+}
+async function encodeGIF(b){
+  const{GIFEncoder,quantize,applyPalette}=await import(CDN.gifenc);
+  const{d,w,h}=px(b);
+  const pal=quantize(d,256),idx=applyPalette(d,pal);
+  const g=GIFEncoder();g.writeFrame(idx,w,h,{palette:pal});g.finish();
+  return new Blob([g.bytes()],{type:'image/gif'});
+}
+async function encodeAPNG(b){
+  const{encode}=await import(CDN.upng);
+  const{d,w,h}=px(b);
+  return new Blob([encode([new Uint8Array(d.buffer)],w,h,0,[256])],{type:'image/apng'});
+}
+function encodeXBM(b){
+  const{d,w,h}=px(b);
+  const rb=Math.ceil(w/8),hex=[];
+  for(let y=0;y<h;y++)for(let xb=0;xb<rb;xb++){let by=0;for(let k=0;k<8;k++){const x=xb*8+k;if(x>=w)break;if(d[(y*w+x)*4]<128)by|=(1<<k)}hex.push('0x'+by.toString(16).padStart(2,'0'))}
+  return new Blob([`#define image_width ${w}\n#define image_height ${h}\nstatic unsigned char image_bits[] = {\n${hex.join(', ')}\n};\n`],{type:'image/x-xbitmap'});
+}
+function encodeXPM(b){
+  const{d,w,h}=px(b);
+  const pal=new Map(),chars=' .+@#$%&*=-;:>,<1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',rows=[];
+  for(let y=0;y<h;y++){
+	let row='';
+	for(let x=0;x<w;x++){
+	  const p=(y*w+x)*4,hex='#'+[d[p],d[p+1],d[p+2]].map(v=>v.toString(16).padStart(2,'0')).join('');
+	  if(!pal.has(hex)){if(pal.size>=chars.length)throw new Error('XPM 调色板超过 93 色');pal.set(hex,chars[pal.size])}
+	  row+=pal.get(hex);
+	}
+	rows.push(`"${row}"`);
+  }
+  const pl=[...pal.entries()].map(([hex,ch])=>`"${ch} c ${hex}"`);
+  return new Blob([`/* XPM */\nstatic char *image[] = {\n"${w} ${h} ${pal.size} 1",\n${pl.join(',\n')},\n${rows.join(',\n')}\n};\n`],{type:'image/x-xpixmap'});
+}
+function encodePCX(b){
+  const{d,w,h}=px(b);
+  const bpl=w+(w%2),raw=new Uint8Array(bpl*h*3);
+  let idx=0;
+  for(let pl=0;pl<3;pl++)for(let y=0;y<h;y++){for(let x=0;x<w;x++)raw[idx++]=d[(y*w+x)*4+pl];if(bpl>w)raw[idx++]=0}
+  const enc=[];
+  for(let i=0;i<raw.length;i++){let run=1;while(i+run<raw.length&&raw[i+run]===raw[i]&&run<63)run++;if(run>1||raw[i]>=0xC0)enc.push(0xC0|run,raw[i]);else enc.push(raw[i]);i+=run-1}
+  const buf=new ArrayBuffer(128+enc.length),v=new DataView(buf),u8=new Uint8Array(buf);
+  u8[0]=10;u8[1]=5;u8[2]=1;u8[3]=8;
+  v.setUint16(4,0,true);v.setUint16(6,0,true);v.setUint16(8,w-1,true);v.setUint16(10,h-1,true);
+  v.setUint16(12,72,true);v.setUint16(14,72,true);u8[65]=3;v.setUint16(66,bpl,true);v.setUint16(68,1,true);
+  u8.set(new Uint8Array(enc),128);
+  return new Blob([buf],{type:'image/x-pcx'});
+}
+function encodePVR(b){
+  const{d,w,h}=px(b);
+  const buf=new ArrayBuffer(52+w*h*4),v=new DataView(buf),u8=new Uint8Array(buf);
+  v.setUint32(0,0x03525650,true);v.setUint32(8,0x15,true);v.setUint32(20,h,true);v.setUint32(24,w,true);
+  v.setUint32(28,1,true);v.setUint32(32,1,true);v.setUint32(36,1,true);v.setUint32(40,1,true);
+  for(let i=0;i<w*h;i++){const o=52+i*4;u8[o]=d[i*4];u8[o+1]=d[i*4+1];u8[o+2]=d[i*4+2];u8[o+3]=d[i*4+3]}
+  return new Blob([buf],{type:'image/x-pvr'});
+}
+async function encodeKTX2(b){
+  const c=new OffscreenCanvas(b.width,b.height);c.getContext('2d').drawImage(b,0,0);
+  const png=await c.convertToBlob({type:'image/png'});
+  const{encodeToKTX2}=await import(CDN.ktx2Enc);
+  return new Blob([await encodeToKTX2(new Uint8Array(await png.arrayBuffer()),{isUASTC:true,generateMipmap:false})],{type:'image/ktx2'});
+}
+function encodeDPX(b){
+  const{d,w,h}=px(b);
+  const hs=2048,buf=new ArrayBuffer(hs+w*h*4),v=new DataView(buf),u8=new Uint8Array(buf);
+  u8[0]=0x53;u8[1]=0x44;u8[2]=0x50;u8[3]=0x58;
+  v.setUint32(4,hs,false);v.setUint32(8,1,false);
+  v.setUint16(768,0,false);v.setUint16(770,1,false);v.setUint32(772,w,false);v.setUint32(776,h,false);
+  v.setUint32(800,0,false);v.setUint32(804,0,false);v.setFloat32(808,0,false);v.setFloat32(812,255,false);
+  u8[816]=0;u8[817]=0;u8[818]=0;u8[819]=0;v.setUint16(820,8,false);v.setUint16(822,1,false);
+  for(let i=0;i<w*h;i++){const o=hs+i*4;u8[o]=d[i*4];u8[o+1]=d[i*4+1];u8[o+2]=d[i*4+2];u8[o+3]=d[i*4+3]}
+  return new Blob([buf],{type:'image/dpx'});
+}
+async function encodeSVG(b){
+  const c=new OffscreenCanvas(b.width,b.height);c.getContext('2d').drawImage(b,0,0);
+  const blob=await c.convertToBlob({type:'image/png'});
+  const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]);fr.onerror=rej;fr.readAsDataURL(blob)});
+  return new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${b.width}" height="${b.height}" viewBox="0 0 ${b.width} ${b.height}">\n  <image width="${b.width}" height="${b.height}" xlink:href="data:image/png;base64,${b64}" />\n</svg>`],{type:'image/svg+xml'});
+}
+
+/* ==================== 编码器表 ==================== */
+const ENCODERS={
+  webp:(b,q)=>encodeJsquash(b,'webp',q),avif:(b,q)=>encodeJsquash(b,'avif',q),jxl:(b,q)=>encodeJsquash(b,'jxl',q),
+  qoi:b=>encodeQOI(b),tiff:b=>encodeTIFF(b),tga:b=>encodeTGA(b),
+  ppm:b=>encodePNM(b,'P6'),pgm:b=>encodePNM(b,'P5'),pam:b=>encodePAM(b),
+  ico:b=>encodeICO(b),cur:b=>encodeCUR(b),j2k:(b,q)=>encodeHTJ2K(b,q),
+  hdr:b=>encodeHDR(b),exr:b=>encodeEXR(b),psd:b=>encodePSD(b),fits:b=>encodeFITS(b),
+  icns:b=>encodeICNS(b),dds:b=>encodeDDS(b),gif:b=>encodeGIF(b),apng:b=>encodeAPNG(b),
+  xbm:b=>encodeXBM(b),xpm:b=>encodeXPM(b),pcx:b=>encodePCX(b),pvr:b=>encodePVR(b),
+  ktx2:b=>encodeKTX2(b),dpx:b=>encodeDPX(b),
+  heic:()=>{throw new Error('HEIC 编码需要同源 Web Worker，当前单文件架构不支持')},
+  svg:b=>encodeSVG(b),
+};
+async function encodeImage(b,fmt,q){
+  const nm={jpeg:'image/jpeg',png:'image/png',webp:'image/webp',bmp:'image/bmp'}[fmt];
+  if(nm){
+	const blob=await bitmapToBlob(b,nm,q/100);
+	if(blob?.type===nm)return blob;
+  }
+  const enc=ENCODERS[fmt];
+  if(!enc)throw new Error('不支持的图片输出格式: '+fmt);
+  return enc(b,q);
+}
+/* ==================== 视频/音频参数 ==================== */
+const CRF_VIDEO_FORMATS=new Set(['mp4','webm','mkv','mov','3gp','ts','m2ts','flv','m4v','hevc']);
+const VIDEO_ARGS={
+  mp4:['-c:v','libx264','-preset','fast','-c:a','aac','-b:a','128k','-movflags','+faststart'],
+  webm:['-c:v','libvpx-vp9','-c:a','libopus','-b:a','96k'],
+  mkv:['-c:v','libx264','-c:a','aac'],
+  mov:['-c:v','libx264','-c:a','aac'],
+  avi:['-c:v','mjpeg','-c:a','mp3'],
+  '3gp':['-c:v','libx264','-profile:v','baseline','-level','3.0','-c:a','aac','-b:a','64k'],
+  ogv:['-c:v','libtheora','-c:a','libvorbis','-q:a','4'],
+  ts:['-c:v','libx264','-c:a','aac','-f','mpegts'],
+  m2ts:['-c:v','libx264','-c:a','aac','-f','mpegts'],
+  flv:['-c:v','libx264','-c:a','aac','-f','flv'],
+  wmv:['-c:v','wmv2','-c:a','wmav2'],
+  mpeg:['-c:v','mpeg2video','-c:a','mp2','-f','mpeg'],
+  m4v:['-c:v','libx264','-an'],
+  hevc:['-c:v','libx265','-c:a','aac','-tag:v','hvc1'],
+};
+const VIDEO_MIME={mp4:'video/mp4',webm:'video/webm',mkv:'video/x-matroska',mov:'video/quicktime',avi:'video/x-msvideo',
+  '3gp':'video/3gpp',ogv:'video/ogg',ts:'video/mp2t',m2ts:'video/mp2t',flv:'video/x-flv',wmv:'video/x-ms-wmv',
+  mpeg:'video/mpeg',m4v:'video/x-m4v',hevc:'video/mp4'};
+
+const AUDIO_ARGS={
+  mp3:['-vn','-c:a','libmp3lame','-b:a','192k'],
+  ogg:['-vn','-c:a','libvorbis','-q:a','5'],
+  opus:['-vn','-c:a','libopus','-b:a','128k'],
+  flac:['-vn','-c:a','flac'],
+  wav:['-vn','-c:a','pcm_s16le'],
+  aac:['-vn','-c:a','aac','-b:a','192k'],
+  m4a:['-vn','-c:a','aac','-b:a','192k'],
+};
+const AUDIO_MIME={mp3:'audio/mpeg',ogg:'audio/ogg',opus:'audio/opus',flac:'audio/flac',wav:'audio/wav',aac:'audio/aac',m4a:'audio/mp4'};
+
+/* ==================== 媒体转换 ==================== */
+async function convertImage(item){
+  let b=await decodeToBitmap(item.file);
+  try{return await encodeImage(b,item.format,item.quality)}
+  finally{b.close?.()}
+}
+async function convertVideoOrAudio(item){
+  const ff=await getFFmpeg();
+  const isAudio=AUDIO_FMTS.includes(item.format);
+  const ext=(item.file.name.split('.').pop()||'mp4').toLowerCase();
+  const inName=`in_${Date.now()}.${ext}`;
+  const outExt=EXT_MAP[item.format]||item.format;
+  const outName=`out_${Date.now()}.${outExt}`;
+  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+  let args;
+  if(isAudio){
+	args=['-i',inName,...AUDIO_ARGS[item.format],outName];
+  } else {
+	args=['-i',inName,...(VIDEO_ARGS[item.format]||VIDEO_ARGS.mp4)];
+	if(CRF_VIDEO_FORMATS.has(item.format)){
+	  const crf=Math.max(18,Math.min(35,Math.round((100-item.quality)*.32+18)));
+	  args.push('-crf',String(crf));
+	}
+	args.push(outName);
+  }
+  await ff.exec(args);
+  const data=await ff.readFile(outName);
+  await ff.deleteFile(inName).catch(()=>{});
+  await ff.deleteFile(outName).catch(()=>{});
+  const mime=isAudio?(AUDIO_MIME[item.format]||'audio/mpeg'):(VIDEO_MIME[item.format]||'video/mp4');
+  return new Blob([data.buffer],{type:mime});
+}
+
+/* ==================== 视频 → 图片序列 ==================== */
+async function probeVideoFrames(item){
+  if(item.frameCount!=null&&item.frameCount>0)return item.frameCount;
+  const ff=await getFFmpeg();
+  const ext=(item.file.name.split('.').pop()||'mp4').toLowerCase();
+  const inName=`probe_${Date.now()}.${ext}`;
+  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+  let lastFrame=0;
+  const handler=({message})=>{
+	const m=message.match(/frame=\s*(\d+)/);
+	if(m)lastFrame=Math.max(lastFrame,parseInt(m[1]));
+  };
+  ff.on('log',handler);
+  try{await ff.exec(['-i',inName,'-f','null','-'])}catch{}
+  try{ff.off('log',handler)}catch{}
+  await ff.deleteFile(inName).catch(()=>{});
+  if(lastFrame===0)throw new Error('无法读取视频帧数');
+  item.frameCount=lastFrame;
+  return lastFrame;
+}
+async function convertVideoToFrames(item){
+  const ff=await getFFmpeg();
+  const ext=(item.file.name.split('.').pop()||'mp4').toLowerCase();
+  const inName=`vin_${Date.now()}.${ext}`;
+  const baseName=item.name.replace(/\.[^.]+$/,'').replace(/[^\w\u4e00-\u9fa5-]/g,'_')||'frame';
+  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+  wizProgress.textContent='正在解码视频…';
+  wizProgressFill.style.width='0%';
+  await ff.exec(['-i',inName,'frame_%05d.png']);
+  const all=await ff.listDir('/');
+  const frameFiles=all
+	.filter(f=>!f.isDir&&/^frame_\d+\.png$/.test(f.name))
+	.map(f=>f.name)
+	.sort();
+  if(!frameFiles.length)throw new Error('视频解码未产出任何帧');
+  item.frameCount=frameFiles.length;
+  if(!item.frameFormat)item.frameFormat='webp';
+  if(!item.framePackFormat)item.framePackFormat='zip';
+  if(!item.frameOverrides)item.frameOverrides={};
+  const entries={};
+  for(let i=0;i<frameFiles.length;i++){
+	const frameName=frameFiles[i];
+	const data=await ff.readFile(frameName);
+	const bmp=await createImageBitmap(new Blob([data.buffer],{type:'image/png'}));
+	const fmt=item.frameOverrides[i]||item.frameFormat;
+	const fext=EXT_MAP[fmt]||fmt;
+	const outName=`${baseName}_frame_${String(i+1).padStart(4,'0')}.${fext}`;
+	try{
+	  const encoded=await encodeImage(bmp,fmt,item.quality);
+	  entries[outName]=new Uint8Array(await encoded.arrayBuffer());
+	}finally{
+	  bmp.close?.();
+	}
+	await ff.deleteFile(frameName).catch(()=>{});
+	const pct=Math.round((i+1)/frameFiles.length*100);
+	wizProgress.textContent=`编码帧 ${i+1}/${frameFiles.length}（${pct}%）`;
+	wizProgressFill.style.width=pct+'%';
+  }
+  await ff.deleteFile(inName).catch(()=>{});
+  wizProgress.textContent='正在打包…';
+  const result=await buildArchiveWithFormat(entries,item.framePackFormat);
+  return new Blob([result.data],{type:result.mime});
+}
+async function convertOne(item){
+  if(item.kind==='image')return convertImage(item);
+  if(item.kind==='video'&&item.format==='__frames__')return convertVideoToFrames(item);
+  return convertVideoOrAudio(item);
+}
+
+/* ==================== 结果列表 ==================== */
+function addResult(item){
+  const idx=resultCache.indexOf(item);
+  if(idx>=0)resultCache.splice(idx,1);
+  resultCache.push(item);
+  renderResults();
+  refreshClearBtn();
+}
+function renderResults(){
+  if(!resultCache.length){results.classList.remove('show');return}
+  results.classList.add('show');
+  resultList.innerHTML='';
+  for(const item of resultCache){
+	const row=document.createElement('div');
+	row.className='result-item';
+	const name=esc(item.name);
+	if(item.status==='done'&&item.outputBlob){
+	  const ext=item.type==='pack'?item.packFormat:(EXT_MAP[item.format]||item.format);
+	  const outName=item.name.replace(/\.[^.]+$/,'')+'.'+ext;
+	  const delta=item.size?`${formatBytes(item.size)} → ${formatBytes(item.outputBlob.size)}`:'';
+	  row.innerHTML=`<span class="ri-ok">✓</span><span class="ri-name">${name} → ${esc(outName)}</span><span class="ri-meta">${delta}</span>`;
+	  const btn=document.createElement('button');
+	  btn.className='ri-dl';
+	  btn.textContent='下载';
+	  btn.addEventListener('click',()=>downloadBlob(item.outputBlob,outName));
+	  row.appendChild(btn);
+	}else if(item.status==='error'){
+	  row.innerHTML=`<span class="ri-err">✗</span><span class="ri-name">${name}</span><span class="ri-meta">${esc(item.errorMsg||'失败')}</span>`;
+	}
+	resultList.appendChild(row);
+  }
+}
+function downloadBlob(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+}
+
+/* ==================== 转换按钮 ==================== */
+convertBtn.addEventListener('click',async()=>{
+  const cur=queue[curIdx];
+  if(!cur||cur.type!=='media'||converting)return;
+  converting=true;
+  cur.status='converting';
+  renderWizard();
+  wizProgress.style.display='';
+  wizProgressBar.classList.add('show');
+  wizProgress.textContent='转换中…';
+  wizProgressFill.style.width='0%';
+  let advanced=false;
+  try{
+	cur.outputBlob=await convertOne(cur);
+	cur.status='done';
+	addResult(cur);
+	advanced=true;
+  }catch(err){
+	console.error(err);
+	cur.status='error';
+	cur.errorMsg=friendlyError(err);
+	addResult(cur);
+	wizProgress.textContent=`失败：${cur.errorMsg}`;
+	advanced=true;
+  }finally{
+	converting=false;
+	if(advanced&&curIdx<queue.length-1){
+	  curIdx++;
+	}
+	renderWizard();
+  }
+});
+
+/* ==================== 打包按钮 ==================== */
+packBtn.addEventListener('click',async()=>{
+  const cur=queue[curIdx];
+  if(!cur||cur.type!=='pack'||converting)return;
+  converting=true;
+  packBtn.disabled=true;
+  renderWizard();
+  try{
+	setStatus('正在构建压缩包…');
+	const blob=await buildNestedArchive(cur.nodeId,cur.packFormat);
+	cur.outputBlob=blob;
+	cur.status='done';
+	addResult(cur);
+	const next=findNextPending(curIdx);
+	if(next>=0){curIdx=next;renderWizard()}
+	else{wizard.classList.remove('show');setStatus('全部完成','ok');refreshClearBtn()}
+  }catch(err){
+	console.error(err);
+	cur.status='error';
+	cur.errorMsg=friendlyError(err);
+	addResult(cur);
+	setStatus(`打包失败：${cur.errorMsg}`,'error');
+	const next=findNextPending(curIdx);
+	if(next>=0){curIdx=next;renderWizard()}
+	else{wizard.classList.remove('show');setStatus('全部完成','ok');refreshClearBtn()}
+  }finally{
+	converting=false;
+	renderWizard();
+  }
+});
+
+function findNextPending(from){
+  for(let i=from+1;i<queue.length;i++){
+	if(queue[i].status!=='done')return i;
+  }
+  for(let i=0;i<queue.length;i++){
+	if(queue[i].status!=='done')return i;
+  }
+  return -1;
+}
+
+/* ==================== 打包逻辑 ==================== */
+async function buildNodeEntries(nodeId){
+  const node=nodeMap.get(nodeId);
+  if(!node)return{};
+  const entries={};
+  const baseDepth=node.pathInParent?node.pathInParent.split('/').length:0;
+  for(const item of node.files){
+	if(!item.outputBlob){
+	  throw new Error(`请先转换所有媒体：${item.name}`);
+	}
+	const relPath=item.path.split('/').slice(baseDepth).join('/');
+	entries[relPath]=new Uint8Array(await item.outputBlob.arrayBuffer());
+  }
+  for(const{path,bytes}of node.passthrough)entries[path]=bytes;
+  for(const childId of node.children){
+	const child=nodeMap.get(childId);
+	const childPack=queue.find(q=>q.type==='pack'&&q.nodeId===childId);
+	if(!child||!childPack||childPack.status!=='done')continue;
+	const relPath=child.pathInParent.split('/').pop();
+	entries[relPath]=new Uint8Array(await childPack.outputBlob.arrayBuffer());
+  }
+  return entries;
+}
+
+async function buildArchiveWithFormat(entries,format){
+  if(format==='zip'){
+	const{zipSync}=await import(CDN.fflate);
+	return{data:zipSync(entries,{level:0}),mime:'application/zip',ext:'zip'};
+  }
+  if(format==='tar'||format==='targz'){
+	const{packTar}=await import(CDN.modernTar);
+	const body=await packTar(Object.entries(entries).map(([name,b])=>({header:{name,size:b.byteLength},body:b})));
+	const tarBytes=body instanceof Uint8Array?body:new Uint8Array(body);
+	if(format==='tar')return{data:tarBytes,mime:'application/x-tar',ext:'tar'};
+	return{data:await gzipBytes(tarBytes),mime:'application/gzip',ext:'tar.gz'};
+  }
+  if(format==='7z'){
+	const sz=await getSevenZip();
+	const tmp=`/o_${Date.now()}`;
+	sz.FS.mkdir(tmp);
+	const names=[];
+	let i=0;
+	for(const[name,bytes]of Object.entries(entries)){
+	  const safe=`f_${i++}_${name.split('/').pop()}`;
+	  sz.FS.writeFile(`${tmp}/${safe}`,bytes);
+	  names.push(`${tmp}/${safe}`);
+	}
+	sz.callMain(['a',`${tmp}/a.7z`,...names]);
+	const out=new Uint8Array(sz.FS.readFile(`${tmp}/a.7z`));
+	cleanFsDir(sz.FS,tmp);
+	return{data:out,mime:'application/x-7z-compressed',ext:'7z'};
+  }
+  throw new Error('未知打包格式: '+format);
+}
+
+async function buildNestedArchive(nodeId,format){
+  const node=nodeMap.get(nodeId);
+  if(!node)throw new Error('节点不存在');
+  for(const childId of node.children){
+	const childPack=queue.find(q=>q.type==='pack'&&q.nodeId===childId);
+	if(childPack&&childPack.status!=='done'){
+	  const childEntries=await buildNodeEntries(childId);
+	  const childResult=await buildArchiveWithFormat(childEntries,childPack.packFormat);
+	  childPack.outputBlob=new Blob([childResult.data],{type:childResult.mime});
+	  childPack.status='done';
+	  addResult(childPack);
+	}
+  }
+  const entries=await buildNodeEntries(nodeId);
+  const result=await buildArchiveWithFormat(entries,format);
+  return new Blob([result.data],{type:result.mime});
+}
+
+/* ==================== 打包下载全部 ==================== */
+downloadAllBtn.addEventListener('click',async()=>{
+  const done=resultCache.filter(r=>r.status==='done'&&r.outputBlob);
+  if(!done.length)return;
+  downloadAllBtn.disabled=true;
+  setStatus('正在打包全部结果…');
+  try{
+	const entries={};
+	const used=new Set();
+	for(const item of done){
+	  const ext=item.type==='pack'?item.packFormat:(EXT_MAP[item.format]||item.format);
+	  let name=item.name.replace(/\.[^.]+$/,'')+'.'+ext;
+	  if(used.has(name)){
+		let i=1;
+		while(used.has(name.replace(/(\.[^.]+)$/,`-${i}$1`)))i++;
+		name=name.replace(/(\.[^.]+)$/,`-${i}$1`);
+	  }
+	  used.add(name);
+	  entries[name]=new Uint8Array(await item.outputBlob.arrayBuffer());
+	}
+	const{zipSync}=await import(CDN.fflate);
+	const blob=new Blob([zipSync(entries,{level:0})],{type:'application/zip'});
+	downloadBlob(blob,`converted-${Date.now()}.zip`);
+	setStatus('已打包下载','ok');
+  }catch(err){
+	setStatus(`打包失败：${friendlyError(err)}`,'error');
+  }finally{downloadAllBtn.disabled=false}
+});
+
+/* ==================== 初始化 ==================== */
+refreshClearBtn();
+</script>
+</body>
+</html>
