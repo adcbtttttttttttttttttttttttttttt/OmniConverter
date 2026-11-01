@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Radiant · Omni Converter</title>
+<title>Super · Omni Converter</title>
 <style>
 :root{
   --bg:#faf8f3;--pn:#fffdf8;--bd:#e5e0d5;--bh:#d0c9ba;
@@ -110,7 +110,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;f
 <body>
 <div class="app">
 <header class="header">
-  <div class="header-row"><h1>图片 / 视频 / 音频 / 压缩包转换</h1><span class="ver">Radiant</span></div>
+  <div class="header-row"><h1>图片 / 视频 / 音频 / 压缩包转换</h1><span class="ver">Super</span></div>
   <p>纯本地处理，文件不会上传到任何服务器</p>
 </header>
 <div class="drop" id="dropZone">
@@ -209,6 +209,7 @@ const CDN={
   icns:'https://cdn.jsdmirror.com/npm/icns-endec@0.0.4/+esm',
   upng:'https://cdn.jsdmirror.com/npm/@upng/upng-js/+esm',
   ffmpeg:'https://cdn.jsdmirror.com/npm/@ffmpeg/ffmpeg@0.12.10/+esm',
+  ffmpegDist:'https://cdn.jsdmirror.com/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm',
   ffmpegUtil:'https://cdn.jsdmirror.com/npm/@ffmpeg/util@0.12.1/+esm',
   ffmpegCore:'https://cdn.jsdmirror.com/npm/@ffmpeg/core@0.12.10/dist/esm',
   fflate:'https://cdn.jsdmirror.com/npm/fflate@0.8.2/+esm',
@@ -295,6 +296,30 @@ function formatBytes(n){
   if(n>=1024)return(n/1024).toFixed(0)+' KB';
   return n+' B';
 }
+function esc(value){
+  return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function getOutputExtension(item){
+  if(item.type==='pack')return EXT_MAP[item.packFormat]||item.packFormat;
+  if(item.format==='__frames__')return EXT_MAP[item.framePackFormat]||item.framePackFormat||'zip';
+  return EXT_MAP[item.format]||item.format;
+}
+function getOutputName(item){
+  return item.name.replace(/\.[^.]+$/,'')+'.'+getOutputExtension(item);
+}
+function normalizeArchivePath(path){
+  return String(path).replace(/\\/g,'/').replace(/\0/g,'').split('/')
+	.filter(part=>part&&part!=='.'&&part!=='..').join('/');
+}
+function setEntry(entries,path,bytes){
+  const clean=normalizeArchivePath(path)||'unnamed';
+  let name=clean,i=1;
+  const dot=clean.lastIndexOf('.'),slash=clean.lastIndexOf('/');
+  const split=dot>slash?dot:clean.length;
+  while(Object.prototype.hasOwnProperty.call(entries,name))name=`${clean.slice(0,split)}-${i++}${clean.slice(split)}`;
+  entries[name]=bytes;
+}
+function yieldToBrowser(){return new Promise(resolve=>setTimeout(resolve,0))}
 function guessMime(ext){
   return{jpg:'image/jpeg',jpeg:'image/jpeg',jfif:'image/jpeg',png:'image/png',webp:'image/webp',
 	avif:'image/avif',jxl:'image/jxl',gif:'image/gif',bmp:'image/bmp',tif:'image/tiff',tiff:'image/tiff',
@@ -402,6 +427,7 @@ async function getFFmpeg(){
 	  await ff.load({
 		coreURL:await toBlobURL(`${CDN.ffmpegCore}/ffmpeg-core.js`,'text/javascript'),
 		wasmURL:await toBlobURL(`${CDN.ffmpegCore}/ffmpeg-core.wasm`,'application/wasm'),
+		classWorkerURL:await toBlobURL(`${CDN.ffmpegDist}/worker.js`,'text/javascript'),
 	  });
 	  ff.on('progress',({progress})=>{
 		const pct=Math.min(100,Math.max(0,Math.round(progress*100)));
@@ -518,8 +544,8 @@ async function buildQueueFromFiles(incoming){
 	  const archKey=f.name+':'+f.size;
 	  if(seenArchives.has(archKey))continue;
 	  seenArchives.add(archKey);
-	  await expandArchive(f,null,'');
-	  added=true;
+	  const nodeId=await expandArchive(f,null,'');
+	  if(nodeId!==null)added=true;
 	} else {
 	  const kind=mediaKind(f);
 	  if(!kind)continue;
@@ -544,34 +570,43 @@ async function buildQueueFromFiles(incoming){
 /* ==================== 压缩包展开 ==================== */
 async function expandArchive(file,parentNodeId,parentPath){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const parentNode=parentNodeId===null?null:nodeMap.get(parentNodeId);
+  if(parentNodeId!==null&&!parentNode)return null;
   setStatus(`正在解压 ${file.name}…`);
-  let collected=[];
+  let collected=[],sz=null,tmp='';
   try{
 	if(ext==='zip'){
 	  const{unzipSync}=await import(CDN.fflate);
-	  collected=Object.entries(unzipSync(new Uint8Array(await file.arrayBuffer())))
-		.map(([p,bytes],idx)=>({path:p.replace(/\\/g,'/'),bytes,order:idx}));
-	} else {
-	  const sz=await getSevenZip();
-	  const tmp=`/e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+	  collected=Object.entries(unzipSync(new Uint8Array(await getArrayBuffer(file))))
+		.map(([path,bytes])=>({path,bytes}));
+	}else{
+	  sz=await getSevenZip();
+	  tmp=`/e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+	  const outDir=`${tmp}/out`;
 	  sz.FS.mkdir(tmp);
-	  sz.FS.writeFile(`${tmp}/in.${ext}`,new Uint8Array(await file.arrayBuffer()));
-	  try{sz.callMain(['x',`${tmp}/in.${ext}`,'-o'+tmp,'-y'])}catch{}
-	  const raw=[];
-	  walkFS(sz.FS,tmp,'',raw);
-	  collected=raw.filter(c=>c.path!==`in.${ext}`&&!c.path.startsWith('in/'));
-	  cleanFsDir(sz.FS,tmp);
+	  sz.FS.mkdir(outDir);
+	  sz.FS.writeFile(`${tmp}/in.${ext}`,new Uint8Array(await getArrayBuffer(file)));
+	  sz.callMain(['x',`${tmp}/in.${ext}`,'-o'+outDir,'-y']);
+	  walkFS(sz.FS,outDir,'',collected);
 	}
   }catch(err){
 	setStatus(`解压失败：${friendlyError(err)}`,'error');
 	return null;
+  }finally{
+	if(sz&&tmp)cleanFsDir(sz.FS,tmp);
   }
-  collected=collected.filter(c=>c.path&&!c.path.endsWith('/')&&!c.path.startsWith('__MACOSX/')&&!c.path.includes('/._')&&c.path.split('/').pop()!=='.DS_Store');
+
+  collected=collected.map(c=>({...c,path:normalizeArchivePath(c.path)})).filter(c=>{
+	if(!c.path||c.path.startsWith('__MACOSX/'))return false;
+	const name=c.path.split('/').pop();
+	return name!=='.DS_Store'&&!name.startsWith('._');
+  });
 
   const nodeId=++nodeIdCounter;
   const node={
 	id:nodeId,name:file.name.replace(/\.[^.]+$/,''),originalFormat:ext,
 	parentId:parentNodeId,pathInParent:parentPath,
+	topArchiveId:parentNode?parentNode.topArchiveId:nodeId,
 	children:[],files:[],passthrough:[],
   };
   nodeMap.set(nodeId,node);
@@ -598,19 +633,20 @@ async function expandArchive(file,parentNodeId,parentPath){
 		type:'media',kind,file:new File([bytes],fileName,{type:guessMime(fileExt)}),
 		path:fullPath,name:fileName,size:bytes.length,
 		format:defaultFormat(kind),quality:82,status:'pending',outputBlob:null,errorMsg:null,
-		topArchiveId:node.topArchiveId,
+		archiveNodeId:nodeId,topArchiveId:node.topArchiveId,
 	  };
 	  mediaItems.push(item);
 	  node.files.push(item);
-	} else {
+	}else{
 	  node.passthrough.push({path,bytes});
 	}
   }
-  for(const m of mediaItems)queue.push(m);
+  queue.push(...mediaItems);
   for(const child of childArchives){
 	const subFile=new File([child.bytes],child.fileName,{type:guessMime(child.fileExt)});
 	const childId=await expandArchive(subFile,nodeId,child.fullPath);
 	if(childId)node.children.push(childId);
+	else node.passthrough.push({path:child.fullPath.slice(parentPath?parentPath.length+1:0),bytes:child.bytes});
   }
   setStatus('');
   return nodeId;
@@ -619,40 +655,40 @@ async function expandArchive(file,parentNodeId,parentPath){
 /* ==================== 单文件移除 + 节点清理（Radiant 恢复） ==================== */
 function removeFile(idx){
   if(idx<0||idx>=queue.length||converting)return;
-  const item=queue[idx];
+  const item=queue[idx],current=queue[curIdx];
   if(item.status==='converting')return;
 
   if(item.type==='pack'&&item.nodeId){
-	const indices=new Set();
-	const collect=(nid)=>{
-	  const n=nodeMap.get(nid);
-	  if(!n)return;
-	  for(let i=0;i<queue.length;i++){
-		const q=queue[i];
-		if(q.type==='pack'&&q.nodeId===nid)indices.add(i);
-		else if(q.type==='media'&&q.path){
-		  const prefix=n.pathInParent?n.pathInParent+'/':'';
-		  const match=prefix===''?q.topArchiveId===n.id:q.path.startsWith(prefix);
-		  if(match)indices.add(i);
-		}
-	  }
-	  for(const cid of n.children)collect(cid);
+	const nodeIds=new Set();
+	const collect=nid=>{
+	  if(nodeIds.has(nid))return;
+	  nodeIds.add(nid);
+	  const node=nodeMap.get(nid);
+	  for(const childId of node?.children||[])collect(childId);
 	};
 	collect(item.nodeId);
-	[...indices].sort((a,b)=>b-a).forEach(i=>queue.splice(i,1));
-	const del=(nid)=>{
-	  const n=nodeMap.get(nid);
-	  if(!n)return;
-	  for(const cid of n.children)del(cid);
-	  nodeMap.delete(nid);
-	};
-	del(item.nodeId);
-  } else {
+	for(let i=queue.length-1;i>=0;i--){
+	  const q=queue[i];
+	  if((q.type==='pack'&&nodeIds.has(q.nodeId))||(q.type==='media'&&nodeIds.has(q.archiveNodeId)))queue.splice(i,1);
+	}
+	const parentId=nodeMap.get(item.nodeId)?.parentId;
+	for(const nid of nodeIds)nodeMap.delete(nid);
+	if(parentId!==null&&parentId!==undefined){
+	  const parent=nodeMap.get(parentId);
+	  if(parent)parent.children=parent.children.filter(id=>id!==item.nodeId);
+	  cleanupEmptyNode(parentId);
+	}
+  }else{
 	queue.splice(idx,1);
-	if(item.topArchiveId)cleanupEmptyNode(item.topArchiveId);
+	if(item.archiveNodeId){
+	  const node=nodeMap.get(item.archiveNodeId);
+	  if(node)node.files=node.files.filter(file=>file!==item);
+	  cleanupEmptyNode(item.archiveNodeId);
+	}
   }
 
-  if(curIdx>=queue.length)curIdx=Math.max(0,queue.length-1);
+  if(current&&queue.includes(current))curIdx=queue.indexOf(current);
+  else curIdx=Math.max(0,Math.min(idx,queue.length-1));
   if(!queue.length)wizard.classList.remove('show');
   else renderWizard();
   renderResults();
@@ -662,16 +698,16 @@ function removeFile(idx){
 function cleanupEmptyNode(nodeId){
   const node=nodeMap.get(nodeId);
   if(!node)return;
-  const hasMedia=queue.some(q=>{
-	if(q.type!=='media'||!q.path)return false;
-	const prefix=node.pathInParent?node.pathInParent+'/':'';
-	return prefix===''?q.topArchiveId===node.id:q.path.startsWith(prefix);
-  });
-  const hasChild=node.children.some(cid=>nodeMap.has(cid));
-  const hasPassthrough=node.passthrough.length>0;
-  if(hasMedia||hasChild||hasPassthrough)return;
+  if(node.files.length||node.passthrough.length||node.children.some(id=>nodeMap.has(id)))return;
+  const parentId=node.parentId;
   nodeMap.delete(nodeId);
-  if(node.parentId!==null)cleanupEmptyNode(node.parentId);
+  const packIdx=queue.findIndex(q=>q.type==='pack'&&q.nodeId===nodeId);
+  if(packIdx>=0)queue.splice(packIdx,1);
+  if(parentId!==null){
+	const parent=nodeMap.get(parentId);
+	if(parent)parent.children=parent.children.filter(id=>id!==nodeId);
+	cleanupEmptyNode(parentId);
+  }
 }
 
 /* ==================== 向导渲染 ==================== */
@@ -755,7 +791,10 @@ function renderWizard(){
 	const ddP=createDropdown(packFormatOptions(),cur.framePackFormat,v=>{cur.framePackFormat=v});
 	framePackSlot.appendChild(ddP);
 
-	if(cur.frameCount!=null&&cur.frameCount>0){
+	if(cur.probing){
+	  frameCountText.textContent='正在读取帧数…';
+	  framesDetails.style.display='none';
+	}else if(cur.frameCount!=null&&cur.frameCount>0){
 	  frameCountText.textContent=`共 ${cur.frameCount} 帧`;
 	  if(cur.frameCount<=200){
 		framesDetails.style.display='';
@@ -767,7 +806,7 @@ function renderWizard(){
 		frameCountText.textContent=`共 ${cur.frameCount} 帧（超过 200 帧，仅支持统一格式）`;
 	  }
 	}else{
-	  frameCountText.textContent='点击右侧按钮读取帧数';
+	  frameCountText.textContent=cur.frameProbeError?`读取失败：${cur.frameProbeError}`:'点击右侧按钮读取帧数';
 	  framesDetails.style.display='none';
 	}
 
@@ -785,6 +824,7 @@ function renderWizard(){
   packBtn.style.display=cur.type==='pack'?'':'none';
   convertBtn.disabled=cur.status==='converting'||converting;
   packBtn.disabled=converting;
+  probeFramesBtn.disabled=converting||!isFramesMode||cur.probing;
 
   wizProgress.style.display='none';
   wizProgressBar.classList.remove('show');
@@ -850,18 +890,17 @@ probeFramesBtn.addEventListener('click',async()=>{
   const cur=queue[curIdx];
   if(!cur||cur.format!=='__frames__'||converting)return;
   converting=true;
-  probeFramesBtn.disabled=true;
-  frameCountText.textContent='正在读取帧数…';
+  cur.probing=true;
+  cur.frameProbeError=null;
   renderWizard();
   try{
-	const n=await probeVideoFrames(cur);
-	frameCountText.textContent=`共 ${n} 帧`;
+	await probeVideoFrames(cur);
   }catch(err){
 	console.error(err);
-	frameCountText.textContent=`读取失败：${friendlyError(err)}`;
+	cur.frameProbeError=friendlyError(err);
   }finally{
+	cur.probing=false;
 	converting=false;
-	probeFramesBtn.disabled=false;
 	renderWizard();
   }
 });
@@ -894,12 +933,15 @@ clearBtn.addEventListener('click',()=>{
 /* ==================== 文件输入 ==================== */
 const fileInput=document.createElement('input');
 fileInput.type='file';
+fileInput.id='fileInput';
+fileInput.hidden=true;
 fileInput.multiple=true;
 fileInput.accept=['image/*','video/*','audio/*',
   ...ARCHIVE_EXTS.map(e=>'.'+e),
   ...IMAGE_EXTS.map(e=>'.'+e),
   ...VIDEO_EXTS.map(e=>'.'+e),
   ...AUDIO_EXTS.map(e=>'.'+e)].join(',');
+document.body.appendChild(fileInput);
 dropZone.addEventListener('click',()=>fileInput.click());
 fileInput.addEventListener('change',()=>{buildQueueFromFiles([...fileInput.files]);fileInput.value=''});
 
@@ -989,44 +1031,81 @@ async function bitmapToBlob(b,mime,q){
 
 /* ==================== 手写解码器 ==================== */
 function decodePNM(ab){
-  const bytes=new Uint8Array(ab),text=new TextDecoder('ascii').decode(bytes),t=[];
-  let i=0,hEnd=0;
-  while(t.length<4&&i<text.length){
-	while(i<text.length&&/\s/.test(text[i]))i++;
-	if(text[i]==='#'){while(i<text.length&&text[i]!=='\n')i++;continue}
-	const s=i;while(i<text.length&&!/\s/.test(text[i]))i++;
-	t.push(text.slice(s,i));
-	hEnd=i;
-  }
-  const m=t[0],w=+t[1],h=+t[2];
-  const isBit=m==='P1'||m==='P4';
-  const isAscii=m==='P1'||m==='P2'||m==='P3';
-  const isGray=m==='P1'||m==='P2'||m==='P4'||m==='P5';
-  const mv=isBit?1:(t[3]?+t[3]:255);
-  let ds=hEnd;
-  while(ds<bytes.length&&[10,13,32].includes(bytes[ds]))ds++;
-  const id=new ImageData(w,h),d=id.data;
+  const bytes=new Uint8Array(ab);
+  let offset=0;
+  const isSpace=b=>b===32||(b>=9&&b<=13);
+  const skip=()=>{
+	while(offset<bytes.length){
+	  while(offset<bytes.length&&isSpace(bytes[offset]))offset++;
+	  if(bytes[offset]!==35)break;
+	  while(offset<bytes.length&&bytes[offset]!==10&&bytes[offset]!==13)offset++;
+	}
+  };
+  const readToken=()=>{
+	skip();
+	const start=offset;
+	while(offset<bytes.length&&!isSpace(bytes[offset])&&bytes[offset]!==35)offset++;
+	if(start===offset)throw new Error('PNM 头不完整');
+	return new TextDecoder('ascii').decode(bytes.subarray(start,offset));
+  };
+  const readNumber=()=>{
+	skip();
+	let value=0,found=false;
+	while(offset<bytes.length&&bytes[offset]>=48&&bytes[offset]<=57){
+	  found=true;value=value*10+bytes[offset++]-48;
+	}
+	if(!found)throw new Error('PNM 像素数据不完整');
+	return value;
+  };
 
+  const magic=readToken();
+  if(!/^P[1-6]$/.test(magic))throw new Error('不支持的 PNM 格式');
+  const width=readNumber(),height=readNumber();
+  const isBit=magic==='P1'||magic==='P4';
+  const isAscii=magic==='P1'||magic==='P2'||magic==='P3';
+  const isGray=isBit||magic==='P2'||magic==='P5';
+  const maxValue=isBit?1:readNumber();
+  if(!Number.isSafeInteger(width*height)||width<=0||height<=0||maxValue<=0||maxValue>65535)throw new Error('无效的 PNM 尺寸或位深');
+
+  const count=width*height,id=new ImageData(width,height),out=id.data;
   if(isBit){
-	const ascii=isAscii?text.slice(ds).trim().split(/\s+/).map(Number):null;
-	const rb=Math.ceil(w/8);
-	for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-	  let v;
-	  if(isAscii){v=ascii[y*w+x]?0:255}
-	  else{const bit=(bytes[ds+y*rb+Math.floor(x/8)]>>(7-(x%8)))&1;v=bit?0:255}
-	  const p=y*w+x;
-	  d[p*4]=d[p*4+1]=d[p*4+2]=v;d[p*4+3]=255;
+	if(!isAscii){
+	  if(offset>=bytes.length||!isSpace(bytes[offset]))throw new Error('PNM 头不完整');
+	  if(bytes[offset]===13&&bytes[offset+1]===10)offset+=2;else offset++;
+	}
+	const rowBytes=Math.ceil(width/8);
+	if(!isAscii&&bytes.length-offset<rowBytes*height)throw new Error('PBM 像素数据不完整');
+	for(let i=0;i<count;i++){
+	  const x=i%width,y=Math.floor(i/width);
+	  const bit=isAscii?readNumber():(bytes[offset+y*rowBytes+Math.floor(x/8)]>>(7-(x%8)))&1;
+	  const value=bit?0:255,p=i*4;
+	  out[p]=out[p+1]=out[p+2]=value;out[p+3]=255;
 	}
 	return id;
   }
 
-  const pxData=isAscii?text.slice(ds).trim().split(/\s+/).map(Number):null;
-  const sample=(k)=>(isAscii?pxData[k]:bytes[ds+k])/mv*255;
-
-  if(isGray){
-	for(let i=0;i<w*h;i++){const v=sample(i);d[i*4]=d[i*4+1]=d[i*4+2]=v;d[i*4+3]=255}
-  }else{
-	for(let i=0;i<w*h;i++){d[i*4]=sample(i*3);d[i*4+1]=sample(i*3+1);d[i*4+2]=sample(i*3+2);d[i*4+3]=255}
+  let data=null,bytesPerSample=1;
+  if(!isAscii){
+	if(offset>=bytes.length||!isSpace(bytes[offset]))throw new Error('PNM 头不完整');
+	if(bytes[offset]===13&&bytes[offset+1]===10)offset+=2;else offset++;
+	data=bytes.subarray(offset);bytesPerSample=maxValue>255?2:1;
+	const samples=count*(isGray?1:3);
+	if(data.length<samples*bytesPerSample)throw new Error('PNM 像素数据不完整');
+  }
+  let sampleIndex=0;
+  const sample=()=>{
+	const raw=isAscii?readNumber():(bytesPerSample===1?data[sampleIndex]:(data[sampleIndex*2]<<8)|data[sampleIndex*2+1]);
+	sampleIndex++;
+	return raw*255/maxValue;
+  };
+  for(let i=0;i<count;i++){
+	const p=i*4;
+	if(isGray){
+	  const value=sample();out[p]=out[p+1]=out[p+2]=value;
+	}else{
+	  out[p]=sample();out[p+1]=sample();out[p+2]=sample();
+	}
+	out[p+3]=255;
   }
   return id;
 }
@@ -1101,18 +1180,20 @@ function decodePVR(ab){
 }
 async function decodeRaw(f){
   setStatus('正在解码 RAW（可能耗时较长，请勿操作）…');
-  await new Promise(r=>setTimeout(r,50));
+  await yieldToBrowser();
+  let rc=null;
   try{
 	const{RawConvert}=await import(CDN.raw);
-	const rc=await RawConvert.init();
+	rc=await RawConvert.init();
 	rc.load(await getArrayBuffer(f),f.name);
 	const p=rc.process({colorSpace:'srgb',halfSize:true});
-	rc.dispose();
 	const rgba=new Uint8ClampedArray(p.data.length/3*4);
 	for(let i=0,j=0;i<p.data.length;i+=3,j+=4){rgba[j]=p.data[i];rgba[j+1]=p.data[i+1];rgba[j+2]=p.data[i+2];rgba[j+3]=255}
+	return await toBitmap(new ImageData(rgba,p.width,p.height));
+  }finally{
+	try{rc?.dispose()}catch{}
 	setStatus('');
-	return toBitmap(new ImageData(rgba,p.width,p.height));
-  }catch(err){setStatus('');throw err}
+  }
 }
 async function decodeTexture(f,ext){
   const{parseDDSHeader,parseKTXHeader,parseKTX2Header,decodeImage}=await import(CDN.dds);
@@ -1179,14 +1260,16 @@ const DECODERS={
   dds:async f=>decodeTexture(f,'dds'),ktx:async f=>decodeTexture(f,'ktx'),ktx2:async f=>decodeTexture(f,'ktx2'),
   dpx:async f=>{
 	const ff=await getFFmpeg();
-	const inName=`dpxin_${Date.now()}.dpx`;
-	const outName=`dpxout_${Date.now()}.png`;
-	await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(f)));
-	await ff.exec(['-i',inName,'-frames:v','1',outName]);
-	const data=await ff.readFile(outName);
-	await ff.deleteFile(inName).catch(()=>{});
-	await ff.deleteFile(outName).catch(()=>{});
-	return createImageBitmap(new Blob([data.buffer],{type:'image/png'}),{imageOrientation:'from-image'});
+	const id=`${Date.now()}_${Math.random().toString(36).slice(2)}`;
+	const inName=`dpxin_${id}.dpx`,outName=`dpxout_${id}.png`;
+	try{
+	  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(f)));
+	  await ff.exec(['-i',inName,'-frames:v','1',outName]);
+	  const data=await ff.readFile(outName);
+	  return await createImageBitmap(new Blob([data],{type:'image/png'}),{imageOrientation:'from-image'});
+	}finally{
+	  await Promise.all([ff.deleteFile(inName).catch(()=>{}),ff.deleteFile(outName).catch(()=>{})]);
+	}
   },
   astc:async f=>{
 	const b=new Uint8Array(await getArrayBuffer(f));
@@ -1462,27 +1545,32 @@ async function convertVideoOrAudio(item){
   const ff=await getFFmpeg();
   const isAudio=AUDIO_FMTS.includes(item.format);
   const ext=(item.file.name.split('.').pop()||'mp4').toLowerCase();
-  const inName=`in_${Date.now()}.${ext}`;
+  const id=`${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const inName=`in_${id}.${ext}`;
   const outExt=EXT_MAP[item.format]||item.format;
-  const outName=`out_${Date.now()}.${outExt}`;
-  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
-  let args;
-  if(isAudio){
-	args=['-i',inName,...AUDIO_ARGS[item.format],outName];
-  } else {
-	args=['-i',inName,...(VIDEO_ARGS[item.format]||VIDEO_ARGS.mp4)];
-	if(CRF_VIDEO_FORMATS.has(item.format)){
-	  const crf=Math.max(18,Math.min(35,Math.round((100-item.quality)*.32+18)));
-	  args.push('-crf',String(crf));
+  const outName=`out_${id}.${outExt}`;
+  try{
+	await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+	let args;
+	if(isAudio){
+	  args=['-i',inName,...AUDIO_ARGS[item.format],outName];
+	}else{
+	  args=['-i',inName,...(VIDEO_ARGS[item.format]||VIDEO_ARGS.mp4)];
+	  if(CRF_VIDEO_FORMATS.has(item.format)){
+		const crf=Math.max(18,Math.min(35,Math.round((100-item.quality)*.32+18)));
+		args.push('-crf',String(crf));
+	  }
+	  args.push(outName);
 	}
-	args.push(outName);
+	const code=await ff.exec(args);
+	if(code!==0)throw new Error(`媒体转换失败（FFmpeg ${code}）`);
+	const data=await ff.readFile(outName);
+	if(!data.length)throw new Error('媒体转换未产生输出');
+	const mime=isAudio?(AUDIO_MIME[item.format]||'audio/mpeg'):(VIDEO_MIME[item.format]||'video/mp4');
+	return new Blob([data],{type:mime});
+  }finally{
+	await Promise.all([ff.deleteFile(inName).catch(()=>{}),ff.deleteFile(outName).catch(()=>{})]);
   }
-  await ff.exec(args);
-  const data=await ff.readFile(outName);
-  await ff.deleteFile(inName).catch(()=>{});
-  await ff.deleteFile(outName).catch(()=>{});
-  const mime=isAudio?(AUDIO_MIME[item.format]||'audio/mpeg'):(VIDEO_MIME[item.format]||'video/mp4');
-  return new Blob([data.buffer],{type:mime});
 }
 
 /* ==================== 视频 → 图片序列 ==================== */
@@ -1490,63 +1578,77 @@ async function probeVideoFrames(item){
   if(item.frameCount!=null&&item.frameCount>0)return item.frameCount;
   const ff=await getFFmpeg();
   const ext=(item.file.name.split('.').pop()||'mp4').toLowerCase();
-  const inName=`probe_${Date.now()}.${ext}`;
-  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+  const inName=`probe_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
   let lastFrame=0;
   const handler=({message})=>{
 	const m=message.match(/frame=\s*(\d+)/);
-	if(m)lastFrame=Math.max(lastFrame,parseInt(m[1]));
+	if(m)lastFrame=Math.max(lastFrame,parseInt(m[1],10));
   };
-  ff.on('log',handler);
-  try{await ff.exec(['-i',inName,'-f','null','-'])}catch{}
-  try{ff.off('log',handler)}catch{}
-  await ff.deleteFile(inName).catch(()=>{});
-  if(lastFrame===0)throw new Error('无法读取视频帧数');
-  item.frameCount=lastFrame;
-  return lastFrame;
+  try{
+	await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+	ff.on('log',handler);
+	try{await ff.exec(['-i',inName,'-f','null','-'])}catch{}
+	if(lastFrame===0)throw new Error('无法读取视频帧数');
+	item.frameCount=lastFrame;
+	item.frameProbeError=null;
+	return lastFrame;
+  }finally{
+	try{ff.off('log',handler)}catch{}
+	await ff.deleteFile(inName).catch(()=>{});
+  }
 }
 async function convertVideoToFrames(item){
   const ff=await getFFmpeg();
   const ext=(item.file.name.split('.').pop()||'mp4').toLowerCase();
-  const inName=`vin_${Date.now()}.${ext}`;
+  const id=`${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const inName=`vin_${id}.${ext}`,framePrefix=`frames_${id}_`;
   const baseName=item.name.replace(/\.[^.]+$/,'').replace(/[^\w\u4e00-\u9fa5-]/g,'_')||'frame';
-  await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
-  wizProgress.textContent='正在解码视频…';
-  wizProgressFill.style.width='0%';
-  await ff.exec(['-i',inName,'frame_%05d.png']);
-  const all=await ff.listDir('/');
-  const frameFiles=all
-	.filter(f=>!f.isDir&&/^frame_\d+\.png$/.test(f.name))
-	.map(f=>f.name)
-	.sort();
-  if(!frameFiles.length)throw new Error('视频解码未产出任何帧');
-  item.frameCount=frameFiles.length;
-  if(!item.frameFormat)item.frameFormat='webp';
-  if(!item.framePackFormat)item.framePackFormat='zip';
-  if(!item.frameOverrides)item.frameOverrides={};
-  const entries={};
-  for(let i=0;i<frameFiles.length;i++){
-	const frameName=frameFiles[i];
-	const data=await ff.readFile(frameName);
-	const bmp=await createImageBitmap(new Blob([data.buffer],{type:'image/png'}));
-	const fmt=item.frameOverrides[i]||item.frameFormat;
-	const fext=EXT_MAP[fmt]||fmt;
-	const outName=`${baseName}_frame_${String(i+1).padStart(4,'0')}.${fext}`;
-	try{
-	  const encoded=await encodeImage(bmp,fmt,item.quality);
-	  entries[outName]=new Uint8Array(await encoded.arrayBuffer());
-	}finally{
-	  bmp.close?.();
+  let frameFiles=[];
+  try{
+	await ff.writeFile(inName,new Uint8Array(await getArrayBuffer(item.file)));
+	wizProgress.textContent='正在解码视频…';
+	wizProgressFill.style.width='0%';
+	const code=await ff.exec(['-i',inName,`${framePrefix}%05d.png`]);
+	if(code!==0)throw new Error(`视频解码失败（FFmpeg ${code}）`);
+	const all=await ff.listDir('/');
+	frameFiles=all.filter(f=>!f.isDir&&f.name.startsWith(framePrefix)&&f.name.endsWith('.png')).map(f=>f.name).sort();
+	if(!frameFiles.length)throw new Error('视频解码未产出任何帧');
+	item.frameCount=frameFiles.length;
+	if(!item.frameFormat)item.frameFormat='webp';
+	if(!item.framePackFormat)item.framePackFormat='zip';
+	if(!item.frameOverrides)item.frameOverrides={};
+	const entries=Object.create(null);
+	let lastPct=-1;
+	for(let i=0;i<frameFiles.length;i++){
+	  const frameName=frameFiles[i];
+	  const data=await ff.readFile(frameName);
+	  const bmp=await createImageBitmap(new Blob([data],{type:'image/png'}));
+	  const fmt=item.frameOverrides[i]||item.frameFormat;
+	  const fext=EXT_MAP[fmt]||fmt;
+	  const outName=`${baseName}_frame_${String(i+1).padStart(4,'0')}.${fext}`;
+	  try{
+		const encoded=await encodeImage(bmp,fmt,item.quality);
+		setEntry(entries,outName,new Uint8Array(await encoded.arrayBuffer()));
+	  }finally{
+		bmp.close?.();
+	  }
+	  await ff.deleteFile(frameName).catch(()=>{});
+	  frameFiles[i]=null;
+	  const pct=Math.round((i+1)/frameFiles.length*100);
+	  if(pct!==lastPct){
+		wizProgress.textContent=`编码帧 ${i+1}/${frameFiles.length}（${pct}%）`;
+		wizProgressFill.style.width=pct+'%';lastPct=pct;
+	  }
+	  if(i%2===0)await yieldToBrowser();
 	}
-	await ff.deleteFile(frameName).catch(()=>{});
-	const pct=Math.round((i+1)/frameFiles.length*100);
-	wizProgress.textContent=`编码帧 ${i+1}/${frameFiles.length}（${pct}%）`;
-	wizProgressFill.style.width=pct+'%';
+	wizProgress.textContent='正在打包…';
+	const result=await buildArchiveWithFormat(entries,item.framePackFormat);
+	return new Blob([result.data],{type:result.mime});
+  }finally{
+	const pending=[ff.deleteFile(inName).catch(()=>{})];
+	for(const name of frameFiles)if(name)pending.push(ff.deleteFile(name).catch(()=>{}));
+	await Promise.all(pending);
   }
-  await ff.deleteFile(inName).catch(()=>{});
-  wizProgress.textContent='正在打包…';
-  const result=await buildArchiveWithFormat(entries,item.framePackFormat);
-  return new Blob([result.data],{type:result.mime});
 }
 async function convertOne(item){
   if(item.kind==='image')return convertImage(item);
@@ -1571,8 +1673,7 @@ function renderResults(){
 	row.className='result-item';
 	const name=esc(item.name);
 	if(item.status==='done'&&item.outputBlob){
-	  const ext=item.type==='pack'?item.packFormat:(EXT_MAP[item.format]||item.format);
-	  const outName=item.name.replace(/\.[^.]+$/,'')+'.'+ext;
+	  const outName=getOutputName(item);
 	  const delta=item.size?`${formatBytes(item.size)} → ${formatBytes(item.outputBlob.size)}`:'';
 	  row.innerHTML=`<span class="ri-ok">✓</span><span class="ri-name">${name} → ${esc(outName)}</span><span class="ri-meta">${delta}</span>`;
 	  const btn=document.createElement('button');
@@ -1600,6 +1701,8 @@ convertBtn.addEventListener('click',async()=>{
   if(!cur||cur.type!=='media'||converting)return;
   converting=true;
   cur.status='converting';
+  cur.errorMsg=null;
+  cur.outputBlob=null;
   renderWizard();
   wizProgress.style.display='';
   wizProgressBar.classList.add('show');
@@ -1616,7 +1719,7 @@ convertBtn.addEventListener('click',async()=>{
 	cur.status='error';
 	cur.errorMsg=friendlyError(err);
 	addResult(cur);
-	wizProgress.textContent=`失败：${cur.errorMsg}`;
+	setStatus(`转换失败：${cur.errorMsg}`,'error');
 	advanced=true;
   }finally{
 	converting=false;
@@ -1632,28 +1735,26 @@ packBtn.addEventListener('click',async()=>{
   const cur=queue[curIdx];
   if(!cur||cur.type!=='pack'||converting)return;
   converting=true;
-  packBtn.disabled=true;
+  cur.status='converting';
+  cur.errorMsg=null;
+  cur.outputBlob=null;
   renderWizard();
   try{
 	setStatus('正在构建压缩包…');
-	const blob=await buildNestedArchive(cur.nodeId,cur.packFormat);
-	cur.outputBlob=blob;
+	cur.outputBlob=await buildNestedArchive(cur.nodeId,cur.packFormat);
 	cur.status='done';
 	addResult(cur);
-	const next=findNextPending(curIdx);
-	if(next>=0){curIdx=next;renderWizard()}
-	else{wizard.classList.remove('show');setStatus('全部完成','ok');refreshClearBtn()}
+	setStatus('打包完成','ok');
   }catch(err){
 	console.error(err);
 	cur.status='error';
 	cur.errorMsg=friendlyError(err);
 	addResult(cur);
 	setStatus(`打包失败：${cur.errorMsg}`,'error');
-	const next=findNextPending(curIdx);
-	if(next>=0){curIdx=next;renderWizard()}
-	else{wizard.classList.remove('show');setStatus('全部完成','ok');refreshClearBtn()}
   }finally{
 	converting=false;
+	const next=findNextPending(curIdx);
+	if(next>=0)curIdx=next;
 	renderWizard();
   }
 });
@@ -1671,27 +1772,35 @@ function findNextPending(from){
 /* ==================== 打包逻辑 ==================== */
 async function buildNodeEntries(nodeId){
   const node=nodeMap.get(nodeId);
-  if(!node)return{};
-  const entries={};
+  if(!node)throw new Error('压缩包节点不存在');
+  const entries=Object.create(null);
   const baseDepth=node.pathInParent?node.pathInParent.split('/').length:0;
   for(const item of node.files){
-	if(!item.outputBlob){
-	  throw new Error(`请先转换所有媒体：${item.name}`);
-	}
+	if(!item.outputBlob)throw new Error(`请先转换所有媒体：${item.name}`);
 	const relPath=item.path.split('/').slice(baseDepth).join('/');
-	entries[relPath]=new Uint8Array(await item.outputBlob.arrayBuffer());
+	setEntry(entries,relPath,new Uint8Array(await item.outputBlob.arrayBuffer()));
   }
-  for(const{path,bytes}of node.passthrough)entries[path]=bytes;
+  for(const{path,bytes}of node.passthrough)setEntry(entries,path,bytes);
   for(const childId of node.children){
 	const child=nodeMap.get(childId);
 	const childPack=queue.find(q=>q.type==='pack'&&q.nodeId===childId);
-	if(!child||!childPack||childPack.status!=='done')continue;
-	const relPath=child.pathInParent.split('/').pop();
-	entries[relPath]=new Uint8Array(await childPack.outputBlob.arrayBuffer());
+	if(!child||!childPack||childPack.status!=='done'||!childPack.outputBlob)throw new Error('请先完成嵌套压缩包');
+	const originalName=child.pathInParent.split('/').pop();
+	const ext=EXT_MAP[childPack.packFormat]||childPack.packFormat;
+	const relPath=originalName.replace(/\.[^.]+$/,'')+'.'+ext;
+	setEntry(entries,relPath,new Uint8Array(await childPack.outputBlob.arrayBuffer()));
   }
   return entries;
 }
 
+function ensureFsDir(FS,path){
+  if(typeof FS.mkdirTree==='function'){FS.mkdirTree(path);return}
+  let current='';
+  for(const part of path.split('/').filter(Boolean)){
+	current+='/'+part;
+	try{FS.mkdir(current)}catch{}
+  }
+}
 async function buildArchiveWithFormat(entries,format){
   if(format==='zip'){
 	const{zipSync}=await import(CDN.fflate);
@@ -1706,19 +1815,27 @@ async function buildArchiveWithFormat(entries,format){
   }
   if(format==='7z'){
 	const sz=await getSevenZip();
-	const tmp=`/o_${Date.now()}`;
-	sz.FS.mkdir(tmp);
-	const names=[];
-	let i=0;
-	for(const[name,bytes]of Object.entries(entries)){
-	  const safe=`f_${i++}_${name.split('/').pop()}`;
-	  sz.FS.writeFile(`${tmp}/${safe}`,bytes);
-	  names.push(`${tmp}/${safe}`);
+	const tmp=`/o_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+	const content=`${tmp}/content`,archive=`${tmp}/a.7z`;
+	let previousCwd='/';
+	try{
+	  ensureFsDir(sz.FS,content);
+	  for(const[name,bytes]of Object.entries(entries)){
+		const clean=normalizeArchivePath(name);
+		if(!clean)continue;
+		const full=`${content}/${clean}`;
+		ensureFsDir(sz.FS,full.slice(0,full.lastIndexOf('/')));
+		sz.FS.writeFile(full,bytes);
+	  }
+	  previousCwd=sz.FS.cwd();
+	  sz.FS.chdir(content);
+	  sz.callMain(['a',archive,'.']);
+	  const out=new Uint8Array(sz.FS.readFile(archive));
+	  return{data:out,mime:'application/x-7z-compressed',ext:'7z'};
+	}finally{
+	  try{sz.FS.chdir(previousCwd)}catch{}
+	  cleanFsDir(sz.FS,tmp);
 	}
-	sz.callMain(['a',`${tmp}/a.7z`,...names]);
-	const out=new Uint8Array(sz.FS.readFile(`${tmp}/a.7z`));
-	cleanFsDir(sz.FS,tmp);
-	return{data:out,mime:'application/x-7z-compressed',ext:'7z'};
   }
   throw new Error('未知打包格式: '+format);
 }
@@ -1728,11 +1845,11 @@ async function buildNestedArchive(nodeId,format){
   if(!node)throw new Error('节点不存在');
   for(const childId of node.children){
 	const childPack=queue.find(q=>q.type==='pack'&&q.nodeId===childId);
-	if(childPack&&childPack.status!=='done'){
-	  const childEntries=await buildNodeEntries(childId);
-	  const childResult=await buildArchiveWithFormat(childEntries,childPack.packFormat);
-	  childPack.outputBlob=new Blob([childResult.data],{type:childResult.mime});
+	if(!nodeMap.has(childId)||!childPack)throw new Error('嵌套压缩包节点不存在');
+	if(childPack.status!=='done'||!childPack.outputBlob){
+	  childPack.outputBlob=await buildNestedArchive(childId,childPack.packFormat);
 	  childPack.status='done';
+	  childPack.errorMsg=null;
 	  addResult(childPack);
 	}
   }
@@ -1748,11 +1865,10 @@ downloadAllBtn.addEventListener('click',async()=>{
   downloadAllBtn.disabled=true;
   setStatus('正在打包全部结果…');
   try{
-	const entries={};
+	const entries=Object.create(null);
 	const used=new Set();
 	for(const item of done){
-	  const ext=item.type==='pack'?item.packFormat:(EXT_MAP[item.format]||item.format);
-	  let name=item.name.replace(/\.[^.]+$/,'')+'.'+ext;
+	  let name=getOutputName(item);
 	  if(used.has(name)){
 		let i=1;
 		while(used.has(name.replace(/(\.[^.]+)$/,`-${i}$1`)))i++;
